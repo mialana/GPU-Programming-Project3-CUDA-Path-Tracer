@@ -1,0 +1,31 @@
+CompileFlags:
+    Remove:
+        - -forward-unknown-to-host-compiler
+        - --options-file
+        - -arch=native
+        - -G
+        - -rdc=true
+---
+If:
+    PathMatch: [.*\.cpp, .*\.h, .*\.hpp]
+
+CompileFlags:
+    Add:
+        - -xc++
+        - -I/usr/local/cuda-13.0/targets/x86_64-linux/include
+---
+If:
+    PathMatch: .*\.cu
+
+CompileFlags:
+    Add:
+        - -xcuda
+        - -O3
+        - -use_fast_math
+---
+If:
+    PathMatch: [src/pathtrace\.cu, src/interactions\.cu]
+Diagnostics:
+    Suppress: # supress errors from thrust base code
+        - no_member
+        - typename_nested_not_found

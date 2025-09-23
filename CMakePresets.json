@@ -1,0 +1,33 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 20
+    },
+    "configurePresets": [
+        {
+            "name": "aliu-configure",
+            "displayName": "Aliu Base (Multi-Config)",
+            "generator": "Ninja Multi-Config",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_CONFIGURATION_TYPES": "Debug;Release",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "aliu-Debug",
+            "displayName": "Aliu Debug Build",
+            "configurePreset": "aliu-configure",
+            "configuration": "Debug"
+        },
+        {
+            "name": "aliu-Release",
+            "displayName": "Aliu Release Build",
+            "configurePreset": "aliu-configure",
+            "configuration": "Release"
+        }
+    ]
+}
