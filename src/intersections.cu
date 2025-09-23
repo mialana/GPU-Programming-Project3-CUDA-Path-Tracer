@@ -1,14 +1,10 @@
 #include "intersections.h"
 
 __host__ __device__ float boxIntersectionTest(
-    Geom box,
-    Ray r,
-    glm::vec3 &intersectionPoint,
-    glm::vec3 &normal,
-    bool &outside)
+    Geom box, Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside)
 {
     Ray q;
-    q.origin    =                multiplyMV(box.inverseTransform, glm::vec4(r.origin   , 1.0f));
+    q.origin = multiplyMV(box.inverseTransform, glm::vec4(r.origin, 1.0f));
     q.direction = glm::normalize(multiplyMV(box.inverseTransform, glm::vec4(r.direction, 0.0f)));
 
     float tmin = -1e38f;
@@ -57,11 +53,7 @@ __host__ __device__ float boxIntersectionTest(
 }
 
 __host__ __device__ float sphereIntersectionTest(
-    Geom sphere,
-    Ray r,
-    glm::vec3 &intersectionPoint,
-    glm::vec3 &normal,
-    bool &outside)
+    Geom sphere, Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside)
 {
     float radius = .5;
 
@@ -73,7 +65,8 @@ __host__ __device__ float sphereIntersectionTest(
     rt.direction = rd;
 
     float vDotDirection = glm::dot(rt.origin, rt.direction);
-    float radicand = vDotDirection * vDotDirection - (glm::dot(rt.origin, rt.origin) - powf(radius, 2));
+    float radicand = vDotDirection * vDotDirection
+                     - (glm::dot(rt.origin, rt.origin) - powf(radius, 2));
     if (radicand < 0)
     {
         return -1;
@@ -88,13 +81,11 @@ __host__ __device__ float sphereIntersectionTest(
     if (t1 < 0 && t2 < 0)
     {
         return -1;
-    }
-    else if (t1 > 0 && t2 > 0)
+    } else if (t1 > 0 && t2 > 0)
     {
         t = min(t1, t2);
         outside = true;
-    }
-    else
+    } else
     {
         t = max(t1, t2);
         outside = false;

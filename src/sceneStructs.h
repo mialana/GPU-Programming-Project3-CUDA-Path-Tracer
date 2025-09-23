@@ -9,11 +9,7 @@
 
 #define BACKGROUND_COLOR (glm::vec3(0.0f))
 
-enum GeomType
-{
-    SPHERE,
-    CUBE
-};
+enum GeomType { SPHERE, CUBE };
 
 struct Ray
 {
@@ -36,11 +32,13 @@ struct Geom
 struct Material
 {
     glm::vec3 color;
+
     struct
     {
         float exponent;
         glm::vec3 color;
     } specular;
+
     float hasReflective;
     float hasRefractive;
     float indexOfRefraction;
@@ -81,7 +79,7 @@ struct PathSegment
 // 2) BSDF evaluation: generate a new ray
 struct ShadeableIntersection
 {
-  float t;
-  glm::vec3 surfaceNormal;
-  int materialId;
+    float t;
+    glm::vec3 surfaceNormal;
+    int materialId;
 };

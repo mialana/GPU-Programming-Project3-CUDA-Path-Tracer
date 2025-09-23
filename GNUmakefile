@@ -4,6 +4,7 @@ CMAKE := /opt/cmake-4.1.1/bin/cmake
 
 format: ./src
 	find src \
+	-path src/ImGui -prune -o \
   -type f \( -iname '*.h' -o -iname '*.hpp' -o -iname '*.cpp' -o -iname '*.cu' -o -iname '*.glsl' \) \
   -exec clang-format -i {} +
 

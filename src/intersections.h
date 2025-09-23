@@ -5,7 +5,6 @@
 #include <glm/glm.hpp>
 #include <glm/gtx/intersect.hpp>
 
-
 /**
  * Handy-dandy hash function that provides seeds for random number generation.
  */
@@ -49,11 +48,7 @@ __host__ __device__ inline glm::vec3 multiplyMV(glm::mat4 m, glm::vec4 v)
  * @return                   Ray parameter `t` value. -1 if no intersection.
  */
 __host__ __device__ float boxIntersectionTest(
-    Geom box,
-    Ray r,
-    glm::vec3& intersectionPoint,
-    glm::vec3& normal,
-    bool& outside);
+    Geom box, Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside);
 
 // CHECKITOUT
 /**
@@ -66,8 +61,4 @@ __host__ __device__ float boxIntersectionTest(
  * @return                   Ray parameter `t` value. -1 if no intersection.
  */
 __host__ __device__ float sphereIntersectionTest(
-    Geom sphere,
-    Ray r,
-    glm::vec3& intersectionPoint,
-    glm::vec3& normal,
-    bool& outside);
+    Geom sphere, Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside);

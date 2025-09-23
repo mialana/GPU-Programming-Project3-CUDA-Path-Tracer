@@ -23,8 +23,7 @@ Scene::Scene(string filename)
     {
         loadFromJSON(filename);
         return;
-    }
-    else
+    } else
     {
         cout << "Couldn't read from " << filename << endl;
         exit(-1);
@@ -47,14 +46,12 @@ void Scene::loadFromJSON(const std::string& jsonName)
         {
             const auto& col = p["RGB"];
             newMaterial.color = glm::vec3(col[0], col[1], col[2]);
-        }
-        else if (p["TYPE"] == "Emitting")
+        } else if (p["TYPE"] == "Emitting")
         {
             const auto& col = p["RGB"];
             newMaterial.color = glm::vec3(col[0], col[1], col[2]);
             newMaterial.emittance = p["EMITTANCE"];
-        }
-        else if (p["TYPE"] == "Specular")
+        } else if (p["TYPE"] == "Specular")
         {
             const auto& col = p["RGB"];
             newMaterial.color = glm::vec3(col[0], col[1], col[2]);
@@ -70,8 +67,7 @@ void Scene::loadFromJSON(const std::string& jsonName)
         if (type == "cube")
         {
             newGeom.type = CUBE;
-        }
-        else
+        } else
         {
             newGeom.type = SPHERE;
         }
@@ -82,8 +78,9 @@ void Scene::loadFromJSON(const std::string& jsonName)
         newGeom.translation = glm::vec3(trans[0], trans[1], trans[2]);
         newGeom.rotation = glm::vec3(rotat[0], rotat[1], rotat[2]);
         newGeom.scale = glm::vec3(scale[0], scale[1], scale[2]);
-        newGeom.transform = utilityCore::buildTransformationMatrix(
-            newGeom.translation, newGeom.rotation, newGeom.scale);
+        newGeom.transform = utilityCore::buildTransformationMatrix(newGeom.translation,
+                                                                   newGeom.rotation,
+                                                                   newGeom.scale);
         newGeom.inverseTransform = glm::inverse(newGeom.transform);
         newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
 
@@ -105,7 +102,7 @@ void Scene::loadFromJSON(const std::string& jsonName)
     camera.lookAt = glm::vec3(lookat[0], lookat[1], lookat[2]);
     camera.up = glm::vec3(up[0], up[1], up[2]);
 
-    //calculate fov based on resolution
+    // calculate fov based on resolution
     float yscaled = tan(fovy * (PI / 180));
     float xscaled = (yscaled * camera.resolution.x) / camera.resolution.y;
     float fovx = (atan(xscaled) * 180) / PI;
@@ -113,11 +110,11 @@ void Scene::loadFromJSON(const std::string& jsonName)
 
     camera.right = glm::normalize(glm::cross(camera.view, camera.up));
     camera.pixelLength = glm::vec2(2 * xscaled / (float)camera.resolution.x,
-        2 * yscaled / (float)camera.resolution.y);
+                                   2 * yscaled / (float)camera.resolution.y);
 
     camera.view = glm::normalize(camera.lookAt - camera.position);
 
-    //set up render camera stuff
+    // set up render camera stuff
     int arraylen = camera.resolution.x * camera.resolution.y;
     state.image.resize(arraylen);
     std::fill(state.image.begin(), state.image.end(), glm::vec3());

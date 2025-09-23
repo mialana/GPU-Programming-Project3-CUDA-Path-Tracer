@@ -5,33 +5,31 @@
 #include <iostream>
 #include <string>
 
-Image::Image(int x, int y)
-    : xSize(x), ySize(y), pixels(new glm::vec3[x * y]) 
-{}
+Image::Image(int x, int y) : xSize(x), ySize(y), pixels(new glm::vec3[x * y]) {}
 
 Image::~Image()
 {
     delete pixels;
 }
 
-void Image::setPixel(int x, int y, const glm::vec3 &pixel)
+void Image::setPixel(int x, int y, const glm::vec3& pixel)
 {
     assert(x >= 0 && y >= 0 && x < xSize && y < ySize);
     pixels[(y * xSize) + x] = pixel;
 }
 
-void Image::savePNG(const std::string &baseFilename)
+void Image::savePNG(const std::string& baseFilename)
 {
-    unsigned char *bytes = new unsigned char[3 * xSize * ySize];
+    unsigned char* bytes = new unsigned char[3 * xSize * ySize];
     for (int y = 0; y < ySize; y++)
     {
         for (int x = 0; x < xSize; x++)
         {
             int i = y * xSize + x;
             glm::vec3 pix = glm::clamp(pixels[i], glm::vec3(), glm::vec3(1)) * 255.f;
-            bytes[3 * i + 0] = (unsigned char) pix.x;
-            bytes[3 * i + 1] = (unsigned char) pix.y;
-            bytes[3 * i + 2] = (unsigned char) pix.z;
+            bytes[3 * i + 0] = (unsigned char)pix.x;
+            bytes[3 * i + 1] = (unsigned char)pix.y;
+            bytes[3 * i + 2] = (unsigned char)pix.z;
         }
     }
 
@@ -42,9 +40,9 @@ void Image::savePNG(const std::string &baseFilename)
     delete[] bytes;
 }
 
-void Image::saveHDR(const std::string &baseFilename)
+void Image::saveHDR(const std::string& baseFilename)
 {
     std::string filename = baseFilename + ".hdr";
-    stbi_write_hdr(filename.c_str(), xSize, ySize, 3, (const float *) pixels);
+    stbi_write_hdr(filename.c_str(), xSize, ySize, 3, (const float*)pixels);
     std::cout << "Saved " + filename + "." << std::endl;
 }

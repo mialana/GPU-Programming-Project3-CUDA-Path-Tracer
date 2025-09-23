@@ -39,7 +39,7 @@ static glm::vec3 cammove;
 
 float zoom, theta, phi;
 glm::vec3 cameraPosition;
-glm::vec3 ogLookAt; // for recentering the camera
+glm::vec3 ogLookAt;  // for recentering the camera
 
 Scene* scene;
 GuiDataContainer* guiData;
@@ -61,7 +61,7 @@ bool mouseOverImGuiWinow = false;
 
 // Forward declarations for window loop and interactivity
 void runCuda();
-void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods);
+void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
 void mousePositionCallback(GLFWwindow* window, double xpos, double ypos);
 void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 
@@ -90,20 +90,19 @@ void initTextures()
 void initVAO(void)
 {
     GLfloat vertices[] = {
-        -1.0f, -1.0f,
-        1.0f, -1.0f,
-        1.0f,  1.0f,
-        -1.0f,  1.0f,
+        -1.0f,
+        -1.0f,
+        1.0f,
+        -1.0f,
+        1.0f,
+        1.0f,
+        -1.0f,
+        1.0f,
     };
 
-    GLfloat texcoords[] = {
-        1.0f, 1.0f,
-        0.0f, 1.0f,
-        0.0f, 0.0f,
-        1.0f, 0.0f
-    };
+    GLfloat texcoords[] = {1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f};
 
-    GLushort indices[] = { 0, 1, 3, 3, 1, 2 };
+    GLushort indices[] = {0, 1, 3, 3, 1, 2};
 
     GLuint vertexBufferObjID[3];
     glGenBuffers(3, vertexBufferObjID);
@@ -124,11 +123,11 @@ void initVAO(void)
 
 GLuint initShader()
 {
-    const char* attribLocations[] = { "Position", "Texcoords" };
+    const char* attribLocations[] = {"Position", "Texcoords"};
     GLuint program = glslUtility::createDefaultProgram(attribLocations, 2);
     GLint location;
 
-    //glUseProgram(program);
+    // glUseProgram(program);
     if ((location = glGetUniformLocation(program, "u_image")) != -1)
     {
         glUniform1i(location, 0);
@@ -227,11 +226,12 @@ bool init()
         return false;
     }
     printf("Opengl Version:%s\n", glGetString(GL_VERSION));
-    //Set up ImGui
+    // Set up ImGui
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    io = &ImGui::GetIO(); (void)io;
+    io = &ImGui::GetIO();
+    (void)io;
     ImGui::StyleColorsLight();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 120");
@@ -254,7 +254,6 @@ void InitImguiData(GuiDataContainer* guiData)
     imguiData = guiData;
 }
 
-
 // LOOK: Un-Comment to check ImGui Usage
 void RenderImGui()
 {
@@ -270,28 +269,31 @@ void RenderImGui()
     static float f = 0.0f;
     static int counter = 0;
 
-    ImGui::Begin("Path Tracer Analytics");                  // Create a window called "Hello, world!" and append into it.
-    
+    ImGui::Begin(
+        "Path Tracer Analytics");  // Create a window called "Hello, world!" and append into it.
+
     // LOOK: Un-Comment to check the output window and usage
-    //ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
-    //ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
-    //ImGui::Checkbox("Another Window", &show_another_window);
+    // ImGui::Text("This is some useful text.");               // Display some text (you can use a
+    // format strings too) ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools
+    // storing our window open/close state ImGui::Checkbox("Another Window", &show_another_window);
 
-    //ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-    //ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
+    // ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from
+    // 0.0f to 1.0f ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats
+    // representing a color
 
-    //if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
-    //    counter++;
-    //ImGui::SameLine();
-    //ImGui::Text("counter = %d", counter);
+    // if (ImGui::Button("Button"))                            // Buttons return true when clicked
+    // (most widgets return true when edited/activated)
+    //     counter++;
+    // ImGui::SameLine();
+    // ImGui::Text("counter = %d", counter);
     ImGui::Text("Traced Depth %d", imguiData->TracedDepth);
-    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
+                1000.0f / ImGui::GetIO().Framerate,
+                ImGui::GetIO().Framerate);
     ImGui::End();
-
 
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
 }
 
 bool MouseOverImGuiWindow()
@@ -307,7 +309,8 @@ void mainLoop()
 
         runCuda();
 
-        std::string title = "CIS565 Path Tracer | " + utilityCore::convertIntToString(iteration) + " Iterations";
+        std::string title = "CIS565 Path Tracer | " + utilityCore::convertIntToString(iteration)
+                            + " Iterations";
         glfwSetWindowTitle(window, title.c_str());
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
         glBindTexture(GL_TEXTURE_2D, displayImage);
@@ -318,7 +321,7 @@ void mainLoop()
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
         // VAO, shader program, and texture already bound
-        glDrawElements(GL_TRIANGLES, 6,  GL_UNSIGNED_SHORT, 0);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, 0);
 
         // Render ImGui Stuff
         RenderImGui();
@@ -353,7 +356,7 @@ int main(int argc, char** argv)
     // Load scene file
     scene = new Scene(sceneFile);
 
-    //Create Instance for ImGUIData
+    // Create Instance for ImGUIData
     guiData = new GuiDataContainer();
 
     // Set up camera stuff from loaded path tracer settings
@@ -415,7 +418,7 @@ void saveImage()
 
     // CHECKITOUT
     img.savePNG(filename);
-    //img.saveHDR(filename);  // Save a Radiance HDR file
+    // img.saveHDR(filename);  // Save a Radiance HDR file
 }
 
 void runCuda()
@@ -430,7 +433,7 @@ void runCuda()
 
         cam.view = -glm::normalize(cameraPosition);
         glm::vec3 v = cam.view;
-        glm::vec3 u = glm::vec3(0, 1, 0);//glm::normalize(cam.up);
+        glm::vec3 u = glm::vec3(0, 1, 0);  // glm::normalize(cam.up);
         glm::vec3 r = glm::cross(v, u);
         cam.up = glm::cross(r, v);
         cam.right = r;
@@ -462,8 +465,7 @@ void runCuda()
 
         // unmap buffer object
         cudaGLUnmapBufferObject(pbo);
-    }
-    else
+    } else
     {
         saveImage();
         pathtraceFree();
@@ -486,9 +488,7 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
                 saveImage();
                 glfwSetWindowShouldClose(window, GL_TRUE);
                 break;
-            case GLFW_KEY_S:
-                saveImage();
-                break;
+            case GLFW_KEY_S: saveImage(); break;
             case GLFW_KEY_SPACE:
                 camchanged = true;
                 renderState = &scene->state;
@@ -515,7 +515,7 @@ void mousePositionCallback(GLFWwindow* window, double xpos, double ypos)
 {
     if (xpos == lastX || ypos == lastY)
     {
-        return; // otherwise, clicking back into window causes re-start
+        return;  // otherwise, clicking back into window causes re-start
     }
 
     if (leftMousePressed)
@@ -525,14 +525,12 @@ void mousePositionCallback(GLFWwindow* window, double xpos, double ypos)
         theta -= (ypos - lastY) / height;
         theta = std::fmax(0.001f, std::fmin(theta, PI));
         camchanged = true;
-    }
-    else if (rightMousePressed)
+    } else if (rightMousePressed)
     {
         zoom += (ypos - lastY) / height;
         zoom = std::fmax(0.1f, zoom);
         camchanged = true;
-    }
-    else if (middleMousePressed)
+    } else if (middleMousePressed)
     {
         renderState = &scene->state;
         Camera& cam = renderState->camera;
