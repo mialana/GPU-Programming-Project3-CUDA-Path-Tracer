@@ -5,7 +5,7 @@
         "--background-index",
         "--compile-commands-dir=${workspaceFolder}/build"
     ],
-    "[cpp]": {
+    "[cpp][cuda-cpp][glsl]": {
         "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
     },
     "cmake.cmakePath": "/opt/cmake-4.1.1/bin/cmake",

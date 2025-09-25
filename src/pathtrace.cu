@@ -43,12 +43,12 @@ void checkCUDAErrorFn(const char* msg, const char* file, int line)
 #endif  // ERRORCHECK
 }
 
-__host__ __device__ thrust::default_random_engine makeSeededRandomEngine(int iter,
-                                                                         int index,
-                                                                         int depth)
+__host__ __device__ thrust::random::linear_congruential_engine<unsigned int, 48271, 0, 2147483647>
+makeSeededRandomEngine(int iter, int index, int depth)
 {
     int h = utilhash((1 << 31) | (depth << 22) | iter) ^ utilhash(index);
-    return thrust::default_random_engine(h);
+
+    return thrust::random::linear_congruential_engine<unsigned int, 48271, 0, 2147483647>(h);
 }
 
 // Kernel that writes the image to the OpenGL PBO directly.
@@ -259,7 +259,8 @@ __global__ void shadeFakeMaterial(int iter,
             // Set up the RNG
             // LOOK: this is how you use thrust's RNG! Please look at
             // makeSeededRandomEngine as well.
-            thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
+            thrust::random::linear_congruential_engine<unsigned int, 48271, 0, 2147483647> rng
+                = makeSeededRandomEngine(iter, idx, 0);
             thrust::uniform_real_distribution<float> u01(0, 1);
 
             Material material = materials[intersection.materialId];
@@ -276,9 +277,17 @@ __global__ void shadeFakeMaterial(int iter,
             else
             {
                 float lightTerm = glm::dot(intersection.surfaceNormal, glm::vec3(0.0f, 1.0f, 0.0f));
-                pathSegments[idx].color *= (materialColor * lightTerm) * 0.3f
-                                           + ((1.0f - intersection.t * 0.02f) * materialColor)
-                                                 * 0.7f;
+                // use `interactions::scatterRay` to calculate bsdf value
+                scatterRay(pathSegments[idx],
+                           pathSegments[idx].ray.origin
+                               + (intersection.t * pathSegments[idx].ray.direction),
+                           intersection.surfaceNormal,
+                           material,
+                           rng);
+
+                // pathSegments[idx].color *= (materialColor * lightTerm) * 0.3f
+                //                            + ((1.0f - intersection.t * 0.02f) * materialColor)
+                //                                  * 0.7f;
                 pathSegments[idx].color *= u01(rng);  // apply some noise because why not
             }
             // If there was no intersection, color the ray black.
@@ -395,6 +404,7 @@ void pathtrace(uchar4* pbo, int frame, int iter)
                                                                         dev_intersections,
                                                                         dev_paths,
                                                                         dev_materials);
+                                                                  
         iterationComplete = true;  // TODO: should be based off stream compaction results.
 
         if (guiData != NULL)
