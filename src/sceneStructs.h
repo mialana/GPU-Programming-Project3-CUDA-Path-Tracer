@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-#define BACKGROUND_COLOR (glm::vec3(0.0f))
+#define BACKGROUND_COLOR (glm::vec4(0.0f))
 
 enum GeomType { SPHERE, CUBE };
 
@@ -31,12 +31,12 @@ struct Geom
 
 struct Material
 {
-    glm::vec3 color;
+    glm::vec4 color;
 
     struct
     {
         float exponent;
-        glm::vec3 color;
+        glm::vec4 color;
     } specular;
 
     float hasReflective;
@@ -69,7 +69,7 @@ struct RenderState
 struct PathSegment
 {
     Ray ray;
-    glm::vec3 color;
+    glm::vec4 color;
     int pixelIndex;
     int remainingBounces;
 };

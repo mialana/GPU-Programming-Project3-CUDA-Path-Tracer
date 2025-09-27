@@ -1,3 +1,4 @@
+#include "glm/detail/type_vec.hpp"
 #include "pathtrace.h"
 
 #include <cstdio>
@@ -7,10 +8,11 @@
 #include <thrust/random.h>
 #include <thrust/remove.h>
 
-#include "sceneStructs.h"
 #include "scene.h"
 #include "glm/glm.hpp"
 #include "glm/gtx/norm.hpp"
+#include "src/sceneStructs.h"
+#include "stream_compaction/radix.h"
 #include "utilities.h"
 #include "intersections.h"
 #include "interactions.h"
@@ -18,9 +20,10 @@
 #define ERRORCHECK 1
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
 
-void checkCUDAErrorFn(const char* msg, const char* file, int line)
+inline void checkCUDAErrorFn(const char* msg, const char* file, int line)
 {
 #if ERRORCHECK
     cudaDeviceSynchronize();
@@ -157,7 +160,7 @@ __global__ void generateRayFromCamera(Camera cam,
         PathSegment& segment = pathSegments[index];
 
         segment.ray.origin = cam.position;
-        segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
+        segment.color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
 
         // TODO: implement antialiasing by jittering the ray
         segment.ray.direction = glm::normalize(
@@ -264,7 +267,7 @@ __global__ void shadeFakeMaterial(int iter,
             thrust::uniform_real_distribution<float> u01(0, 1);
 
             Material material = materials[intersection.materialId];
-            glm::vec3 materialColor = material.color;
+            glm::vec4 materialColor = material.color;
 
             // If the material indicates that the object was a light, "light" the ray
             if (material.emittance > 0.0f)
@@ -285,10 +288,7 @@ __global__ void shadeFakeMaterial(int iter,
                            material,
                            rng);
 
-                // pathSegments[idx].color *= (materialColor * lightTerm) * 0.3f
-                //                            + ((1.0f - intersection.t * 0.02f) * materialColor)
-                //                                  * 0.7f;
-                pathSegments[idx].color *= u01(rng);  // apply some noise because why not
+                pathSegments[idx].color *= lightTerm / INV_PI;
             }
             // If there was no intersection, color the ray black.
             // Lots of renderers use 4 channel color, RGBA, where A = alpha, often
@@ -296,7 +296,7 @@ __global__ void shadeFakeMaterial(int iter,
             // This can be useful for post-processing and image compositing.
         } else
         {
-            pathSegments[idx].color = glm::vec3(0.0f);
+            pathSegments[idx].color.a = 0.f;
         }
     }
 }
@@ -309,7 +309,35 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
     if (index < nPaths)
     {
         PathSegment iterationPath = iterationPaths[index];
-        image[iterationPath.pixelIndex] += iterationPath.color;
+        image[iterationPath.pixelIndex] += glm::vec3(iterationPath.color);
+    }
+}
+
+__global__ void _extractRemainingBounces(int n, PathSegment* paths, int* keys)
+{
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
+    if (index < n)
+    {
+        keys[index] = paths[index].remainingBounces;
+    }
+}
+
+__global__ void _fillBufferWithIndices(int n, int* buf)
+{
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
+    if (index < n)
+    {
+        buf[index] = index;
+    }
+}
+
+template<typename T>
+__global__ void _sortByIndices(int n, T* objects, const int* indices)
+{
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
+    if (index < n)
+    {
+        objects[indices[index]] = objects[index];
     }
 }
 
@@ -369,6 +397,15 @@ void pathtrace(uchar4* pbo, int frame, int iter)
     PathSegment* dev_path_end = dev_paths + pixelcount;
     int num_paths = dev_path_end - dev_paths;
 
+    // Allocate memory for keys of radix sort on the device
+    int* dev_keys;
+    cudaMalloc(&dev_keys, num_paths * sizeof(int));
+    checkCUDAError("cudaMalloc dev_keys");
+
+    int* dev_values;
+    cudaMalloc(&dev_values, num_paths * sizeof(int));
+    checkCUDAError("cudaMalloc dev_values");
+
     // --- PathSegment Tracing Stage ---
     // Shoot ray into scene, bounce between objects, push shading chunks
 
@@ -404,8 +441,39 @@ void pathtrace(uchar4* pbo, int frame, int iter)
                                                                         dev_intersections,
                                                                         dev_paths,
                                                                         dev_materials);
-                                                                  
-        iterationComplete = true;  // TODO: should be based off stream compaction results.
+
+        _extractRemainingBounces<<<numblocksPathSegmentTracing, blockSize1d>>>(num_paths,
+                                                                               dev_paths,
+                                                                               dev_keys);
+
+        _fillBufferWithIndices<<<numblocksPathSegmentTracing, blockSize1d>>>(num_paths, dev_values);
+
+        cudaDeviceSynchronize();
+
+        checkCUDAError("extractRemainingBounces");
+
+        // Sort dev_paths by remainingBounces using StreamCompaction::Radix::sortByKey
+        StreamCompaction::Radix::sortByKey<int>(num_paths,
+                                                dev_keys,
+                                                dev_values,
+                                                dev_keys,
+                                                dev_values,
+                                                ilog2ceil(traceDepth));
+        checkCUDAError("StreamCompaction::Radix::sortByKey");
+
+        _sortByIndices<PathSegment><<<numblocksPathSegmentTracing, blockSize1d>>>(num_paths,
+                                                                     dev_paths,
+                                                                     dev_values);
+
+        _sortByIndices<ShadeableIntersection><<<numblocksPathSegmentTracing, blockSize1d>>>(num_paths,
+                                                                     dev_intersections,
+                                                                     dev_values);
+
+        int lastKey;  // Host variable to store the last key
+        cudaMemcpy(&lastKey, &dev_keys[num_paths - 1], sizeof(int), cudaMemcpyDeviceToHost);
+        checkCUDAError("cudaMemcpy lastKey");
+
+        iterationComplete = (lastKey == 0);  // based off stream compaction results.
 
         if (guiData != NULL)
         {
@@ -429,4 +497,7 @@ void pathtrace(uchar4* pbo, int frame, int iter)
                cudaMemcpyDeviceToHost);
 
     checkCUDAError("pathtrace");
+
+    cudaFree(dev_keys);
+    cudaFree(dev_values);
 }
