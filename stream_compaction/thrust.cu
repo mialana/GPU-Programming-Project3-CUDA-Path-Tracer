@@ -1,5 +1,6 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
+#include <thrust/detail/vector_base.h>
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 #include <thrust/scan.h>
@@ -12,6 +13,8 @@ namespace StreamCompaction
 namespace Thrust
 {
 using StreamCompaction::Common::PerformanceTimer;
+
+using thrust::host_vector;
 
 PerformanceTimer& timer()
 {
@@ -60,12 +63,30 @@ void radixSort(int n, int* o_data, const int* i_data)
     thrust::copy(d_copy.begin(), d_copy.end(), o_data);
 }
 
-void radixSortByKey(int* d_keys, int* d_vals, int N)
+void radixSortByKey(int n, int* out_keys, int* out_values, const int* in_keys, const int* in_values)
 {
-    thrust::device_ptr<int> keys(d_keys);
-    thrust::device_ptr<int> vals(d_vals);
+    // Wrap raw pointers with Thrust device pointers
+    thrust::device_vector<int> d_keys(in_keys, in_keys + n);
+    thrust::device_vector<int> d_values(in_values, in_values + n);
 
-    thrust::sort_by_key(keys, keys + N, vals);
+    bool usingTimer = false;
+    if (!timer().gpu_timer_started)
+    {
+        timer().startGpuTimer();
+        usingTimer = true;
+    }
+
+    // Sort keys and reorder values accordingly
+    thrust::sort_by_key(d_keys.begin(), d_keys.end(), d_values.begin());
+
+    if (usingTimer)
+    {
+        timer().endGpuTimer();
+    }
+
+    // Copy sorted keys and values back to host
+    thrust::copy(d_keys.begin(), d_keys.end(), out_keys);
+    thrust::copy(d_values.begin(), d_values.end(), out_values);
 }
 }  // namespace Thrust
 }  // namespace StreamCompaction
