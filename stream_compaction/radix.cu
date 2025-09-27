@@ -146,10 +146,65 @@ void StreamCompaction::Radix::sort(int n, int* odata, const int* idata, const in
 }
 
 template<typename T>
-void StreamCompaction::Radix::sortByKey(
-    int n, int* outKeys, T* outValues, const int* keys, const T* values, const int maxBitLength)
+void StreamCompaction::Radix::sortByKey(int n,
+                                        int* dev_keys[2],
+                                        T* dev_values[2],
+                                        int* dev_scan,
+                                        int* dev_indices,
+                                        const int maxBitLength)
 {
     const unsigned numLayers = ilog2ceil(n);
+    const unsigned paddedN = 1 << ilog2ceil(n);
+
+    int current = 0;  // Index to track the current buffer (ping-pong)
+
+    for (int tgtBit = 0; tgtBit < maxBitLength; tgtBit++)
+    {
+        unsigned blocks = divup(n, BLOCK_SIZE);
+
+        // Split keys into 0s and 1s based on the target bit
+        _split<<<blocks, BLOCK_SIZE>>>(n, dev_keys[current], dev_scan, tgtBit);
+
+        // Perform scan on the split results
+        Efficient::scanHelper(numLayers, paddedN, dev_scan);
+
+        // Scatter keys and rearrange objects based on the sorted keys
+        _computeScatterIndices<<<blocks, BLOCK_SIZE>>>(n,
+                                                       dev_indices,
+                                                       dev_keys[current],
+                                                       dev_scan,
+                                                       tgtBit);
+
+        // Scatter keys based on the computed indices
+        _scatter<<<blocks, BLOCK_SIZE>>>(n, dev_keys[1 - current], dev_keys[current], dev_indices);
+
+        // Scatter values based on the computed indices
+        _scatter<<<blocks, BLOCK_SIZE>>>(n,
+                                         dev_values[1 - current],
+                                         dev_values[current],
+                                         dev_indices);
+
+        // Swap buffers (ping-pong)
+        current = 1 - current;
+    }
+
+    // Ensure the final sorted data is in dev_keys[1] and dev_values[1]
+    if (current == 0)
+    {
+        int* temp = dev_keys[1];
+        dev_keys[1] = dev_keys[0];
+        dev_keys[0] = temp;
+
+        T* tempVal = dev_values[1];
+        dev_values[1] = dev_values[0];
+        dev_values[0] = tempVal;
+    }
+}
+
+template<typename T>
+void StreamCompaction::Radix::sortByKeyWrapper(
+    int n, int* outKeys, T* outValues, const int* keys, const T* values, const int maxBitLength)
+{
     const unsigned paddedN = 1 << ilog2ceil(n);
 
     // Allocate device memory for keys, objects, and scan
@@ -183,41 +238,24 @@ void StreamCompaction::Radix::sortByKey(
     cudaMemcpy(dev_values[0], values, sizeof(T) * n, cudaMemcpyHostToDevice);
     checkCUDAError("Memory copy from host values to device array failed.");
 
-    int current = 0;  // Index to track the current buffer (ping-pong)
-
-    for (int tgtBit = 0; tgtBit < maxBitLength; tgtBit++)
+    bool usingTimer = false;
+    if (!timer().gpu_timer_started)
     {
-        unsigned blocks = divup(n, BLOCK_SIZE);
-
-        // Split keys into 0s and 1s based on the target bit
-        _split<<<blocks, BLOCK_SIZE>>>(n, dev_keys[current], dev_scan, tgtBit);
-
-        // Perform scan on the split results
-        Efficient::scanHelper(numLayers, paddedN, dev_scan);
-
-        // Scatter keys and rearrange objects based on the sorted keys
-        _computeScatterIndices<<<blocks, BLOCK_SIZE>>>(n,
-                                                       dev_indices,
-                                                       dev_keys[current],
-                                                       dev_scan,
-                                                       tgtBit);
-
-        // Scatter keys based on the computed indices
-        _scatter<<<blocks, BLOCK_SIZE>>>(n, dev_keys[1 - current], dev_keys[current], dev_indices);
-
-        // Scatter values based on the computed indices
-        _scatter<<<blocks, BLOCK_SIZE>>>(n, dev_values[1 - current], dev_values[current], dev_indices);
-
-
-        // Swap buffers (ping-pong)
-        current = 1 - current;
+        timer().startGpuTimer();
+        usingTimer = true;
     }
 
-    cudaMemcpy(outKeys, dev_keys[current], sizeof(int) * n, cudaMemcpyDeviceToHost);
+    // Perform internal sorting
+    sortByKey(n, dev_keys, dev_values, dev_scan, dev_indices, maxBitLength);
 
-    // Copy sorted values back to host
-    cudaMemcpy(outValues, dev_values[current], sizeof(T) * n, cudaMemcpyDeviceToHost);
-    checkCUDAError("Memory copy from device objects array to host failed.");
+    if (usingTimer)
+    {
+        timer().endGpuTimer();
+    }
+
+    // Copy sorted keys and values back to host
+    cudaMemcpy(outKeys, dev_keys[1], sizeof(int) * n, cudaMemcpyDeviceToHost);
+    cudaMemcpy(outValues, dev_values[1], sizeof(T) * n, cudaMemcpyDeviceToHost);
 
     // Free device memory
     cudaFree(dev_keys[0]);
@@ -225,10 +263,29 @@ void StreamCompaction::Radix::sortByKey(
     cudaFree(dev_values[0]);
     cudaFree(dev_values[1]);
     cudaFree(dev_scan);
+    cudaFree(dev_indices);
 }
 
-template void StreamCompaction::Radix::sortByKey<int>(
+template void StreamCompaction::Radix::sortByKey<int>(int n,
+                                                      int* dev_keys[2],
+                                                      int* dev_values[2],
+                                                      int* dev_scan,
+                                                      int* dev_indices,
+                                                      const int maxBitLength);
+
+template void StreamCompaction::Radix::sortByKey<float>(int n,
+                                                        int* dev_keys[2],
+                                                        float* dev_values[2],
+                                                        int* dev_scan,
+                                                        int* dev_indices,
+                                                        const int maxBitLength);
+
+template void StreamCompaction::Radix::sortByKeyWrapper<int>(
     int n, int* outKeys, int* outValues, const int* keys, const int* values, const int maxBitLength);
 
-template void StreamCompaction::Radix::sortByKey<float>(
-    int n, int* outKeys, float* outValues, const int* keys, const float* values, const int maxBitLength);
+template void StreamCompaction::Radix::sortByKeyWrapper<float>(int n,
+                                                               int* outKeys,
+                                                               float* outValues,
+                                                               const int* keys,
+                                                               const float* values,
+                                                               const int maxBitLength);

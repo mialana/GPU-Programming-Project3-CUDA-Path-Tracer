@@ -273,6 +273,7 @@ __global__ void shadeFakeMaterial(int iter,
             if (material.emittance > 0.0f)
             {
                 pathSegments[idx].color *= (materialColor * material.emittance);
+                pathSegments[idx].remainingBounces = 0;
             }
             // Otherwise, do some pseudo-lighting computation. This is actually more
             // like what you would expect from shading in a rasterizer like OpenGL.
@@ -297,6 +298,7 @@ __global__ void shadeFakeMaterial(int iter,
         } else
         {
             pathSegments[idx].color.a = 0.f;
+            pathSegments[idx].remainingBounces = 0;
         }
     }
 }
@@ -313,7 +315,7 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
     }
 }
 
-__global__ void _extractRemainingBounces(int n, PathSegment* paths, int* keys)
+__global__ void _extractRemainingBounces(int n, int* keys, const PathSegment* paths)
 {
     int index = blockIdx.x * blockDim.x + threadIdx.x;
     if (index < n)
@@ -397,14 +399,27 @@ void pathtrace(uchar4* pbo, int frame, int iter)
     PathSegment* dev_path_end = dev_paths + pixelcount;
     int num_paths = dev_path_end - dev_paths;
 
-    // Allocate memory for keys of radix sort on the device
-    int* dev_keys;
-    cudaMalloc(&dev_keys, num_paths * sizeof(int));
-    checkCUDAError("cudaMalloc dev_keys");
+    // Allocate memory for keys and values of radix sort on the device
+    int* dev_keys[2];
+    int* dev_values[2];
+    int* dev_scan;
+    int* dev_indices;
 
-    int* dev_values;
-    cudaMalloc(&dev_values, num_paths * sizeof(int));
-    checkCUDAError("cudaMalloc dev_values");
+    cudaMalloc(&dev_keys[0], num_paths * sizeof(int));
+    checkCUDAError("cudaMalloc dev_keys[0]");
+    cudaMalloc(&dev_keys[1], num_paths * sizeof(int));
+    checkCUDAError("cudaMalloc dev_keys[1]");
+
+    cudaMalloc(&dev_values[0], num_paths * sizeof(int));
+    checkCUDAError("cudaMalloc dev_values[0]");
+    cudaMalloc(&dev_values[1], num_paths * sizeof(int));
+    checkCUDAError("cudaMalloc dev_values[1]");
+
+    cudaMalloc(&dev_scan, num_paths * sizeof(int));
+    checkCUDAError("cudaMalloc dev_scan");
+
+    cudaMalloc(&dev_indices, num_paths * sizeof(int));
+    checkCUDAError("cudaMalloc dev_indices");
 
     // --- PathSegment Tracing Stage ---
     // Shoot ray into scene, bounce between objects, push shading chunks
@@ -442,35 +457,36 @@ void pathtrace(uchar4* pbo, int frame, int iter)
                                                                         dev_paths,
                                                                         dev_materials);
 
-        _extractRemainingBounces<<<numblocksPathSegmentTracing, blockSize1d>>>(num_paths,
-                                                                               dev_paths,
-                                                                               dev_keys);
-
-        _fillBufferWithIndices<<<numblocksPathSegmentTracing, blockSize1d>>>(num_paths, dev_values);
-
+        checkCUDAError("shade fake material");
         cudaDeviceSynchronize();
+
+        _extractRemainingBounces<<<numblocksPathSegmentTracing, blockSize1d>>>(num_paths,
+                                                                               dev_keys[0],
+                                                                               dev_paths);
 
         checkCUDAError("extractRemainingBounces");
 
-        // Sort dev_paths by remainingBounces using StreamCompaction::Radix::sortByKey
+        _fillBufferWithIndices<<<numblocksPathSegmentTracing, blockSize1d>>>(num_paths, dev_values[0]);
+        checkCUDAError("fill buffer with indices");
+
+        // Sort dev_paths by remainingBounces using StreamCompaction::Radix::sortByKeyInternal
         StreamCompaction::Radix::sortByKey<int>(num_paths,
-                                                dev_keys,
-                                                dev_values,
-                                                dev_keys,
-                                                dev_values,
-                                                ilog2ceil(traceDepth));
-        checkCUDAError("StreamCompaction::Radix::sortByKey");
+                                                        dev_keys,
+                                                        dev_values,
+                                                        dev_scan,
+                                                        dev_indices,
+                                                        ilog2ceil(traceDepth));
+        checkCUDAError("StreamCompaction::Radix::sortByKeyInternal");
+        cudaDeviceSynchronize();
 
-        _sortByIndices<PathSegment><<<numblocksPathSegmentTracing, blockSize1d>>>(num_paths,
-                                                                     dev_paths,
-                                                                     dev_values);
+        _sortByIndices<PathSegment>
+            <<<numblocksPathSegmentTracing, blockSize1d>>>(num_paths, dev_paths, dev_values[1]);
 
-        _sortByIndices<ShadeableIntersection><<<numblocksPathSegmentTracing, blockSize1d>>>(num_paths,
-                                                                     dev_intersections,
-                                                                     dev_values);
+        _sortByIndices<ShadeableIntersection>
+            <<<numblocksPathSegmentTracing, blockSize1d>>>(num_paths, dev_intersections, dev_values[1]);
 
         int lastKey;  // Host variable to store the last key
-        cudaMemcpy(&lastKey, &dev_keys[num_paths - 1], sizeof(int), cudaMemcpyDeviceToHost);
+        cudaMemcpy(&lastKey, &dev_keys[1][num_paths - 1], sizeof(int), cudaMemcpyDeviceToHost);
         checkCUDAError("cudaMemcpy lastKey");
 
         iterationComplete = (lastKey == 0);  // based off stream compaction results.
@@ -498,6 +514,10 @@ void pathtrace(uchar4* pbo, int frame, int iter)
 
     checkCUDAError("pathtrace");
 
-    cudaFree(dev_keys);
-    cudaFree(dev_values);
+    cudaFree(dev_keys[0]);
+    cudaFree(dev_keys[1]);
+    cudaFree(dev_values[0]);
+    cudaFree(dev_values[1]);
+    cudaFree(dev_scan);
+    cudaFree(dev_indices);
 }
