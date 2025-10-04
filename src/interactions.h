@@ -39,8 +39,12 @@ __host__ __device__ glm::vec3 calculateRandomDirectionInHemisphere(
  *
  * You may need to change the parameter list for your purposes!
  */
+
+// Modifies all components of input `pathSegment` in-place.
+// Specifically, `PathSegment.ray.intersection`, `PathSegment.ray.origin`,
+// `PathSegment.remainingBounces`, `PathSegment.color`
 __host__ __device__ void scatterRay(PathSegment& pathSegment,
-                                    glm::vec3 intersect,
-                                    glm::vec3 normal,
+                                    const glm::vec3 intersect,
+                                    const glm::vec3 normal,
                                     const Material& m,
                                     thrust::default_random_engine& rng);

@@ -170,7 +170,7 @@ __global__ void generateRayFromCamera(Camera cam,
         segment.ray.origin = cam.position;
         segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
 
-        // currently, ray only lands at origin of each pixel. 
+        // currently, ray only lands at origin of each pixel.
         // jittering within each pixel effectively creates an anti-aliasing effect.
         const float jitterAmt_x = u01(rng) * cam.pixelLength.x;
         const float jitterAmt_y = u01(rng) * cam.pixelLength.y;
@@ -294,10 +294,18 @@ __global__ void shadeFakeMaterial(int iter,
             else
             {
                 float lightTerm = glm::dot(intersection.surfaceNormal, glm::vec3(0.0f, 1.0f, 0.0f));
-                pathSegments[idx].color *= (materialColor * lightTerm) * 0.3f
-                                           + ((1.0f - intersection.t * 0.02f) * materialColor)
-                                                 * 0.7f;
-                pathSegments[idx].color *= u01(rng);  // apply some noise because why not
+
+                // use `interactions::scatterRay` to calculate bsdf value
+                // offset ray by EPSILON
+                scatterRay(pathSegments[idx],
+                           (pathSegments[idx].ray.origin
+                            + (intersection.t * pathSegments[idx].ray.direction))
+                               + (intersection.surfaceNormal * EPSILON),
+                           intersection.surfaceNormal,
+                           material,
+                           rng);
+
+                pathSegments[idx].color *= lightTerm * INV_PI;
             }
             // If there was no intersection, color the ray black.
             // Lots of renderers use 4 channel color, RGBA, where A = alpha, often
@@ -331,11 +339,6 @@ void pathtrace(uchar4* pbo, int frame, int iter)
     const int traceDepth = hst_scene->state.traceDepth;
     const Camera& cam = hst_scene->state.camera;
     const int pixelcount = cam.resolution.x * cam.resolution.y;
-
-    // 2D block for generating ray from camera
-    const dim3 blockSize2d(8, 8);
-    const dim3 blocksPerGrid2d((cam.resolution.x + blockSize2d.x - 1) / blockSize2d.x,
-                               (cam.resolution.y + blockSize2d.y - 1) / blockSize2d.y);
 
     // 1D block for path tracing
     const int blockSize1d = 128;
