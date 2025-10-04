@@ -1,10 +1,9 @@
-.PHONY: clear Debug Release
+.PHONY: clear build Debug Release
 
 CMAKE := /opt/cmake-4.1.1/bin/cmake
 
-format: ./src
-	find src \
-	-path src/ImGui -prune -o \
+format: ./source
+	find source \
   -type f \( -iname '*.h' -o -iname '*.hpp' -o -iname '*.cpp' -o -iname '*.cu' -o -iname '*.glsl' \) \
   -exec clang-format -i {} +
 
@@ -14,8 +13,11 @@ clear:
 configure: clear
 	${CMAKE} --preset aliu-configure
 
+build:
+	${CMAKE} --build --preset aliu-$(MODE)
+
 Debug:
-	${CMAKE} --build --preset aliu-$@ && WAYLAND_DISPLAY='' XDG_SESSION_TYPE=x11 ./build/bin/$@/cis565_path_tracer ./scenes/sphere.json
+	${CMAKE} --build --preset aliu-$@ && ./build/bin/$@/cis565_path_tracer ./scenes/sphere.json
 
 Release:
 	${CMAKE} --build --preset aliu-$@ && WAYLAND_DISPLAY='' XDG_SESSION_TYPE=x11 ./build/bin/$@/cis565_path_tracer ./scenes/sphere.json

@@ -3,73 +3,128 @@
 #include "common.h"
 #include "efficient.h"
 
-namespace StreamCompaction
-{
-namespace Efficient
-{
 using StreamCompaction::Common::PerformanceTimer;
 
-PerformanceTimer& timer()
+PerformanceTimer& StreamCompaction::Efficient::timer()
 {
     static PerformanceTimer timer;
     return timer;
 }
 
-__global__ void kernel_efficientUpSweep(const int n, const int iter, int* scan)
+__global__ void kernel_efficientUpSweep(const unsigned long long paddedN,
+                                        const int stride,
+                                        const int prevStride,
+                                        int* scan)
 {
-    int iterTarget = 1 << (iter + 1);
-    int iterFactor = 1 << iter;
+    int strideIdx = blockIdx.x * blockDim.x + threadIdx.x;  // 0, 1, 2, 3... (like normal)
+                                                            // but this is not target elem index
 
-    unsigned long long index = blockIdx.x * blockDim.x + threadIdx.x;  // allow to exceed 32-bit
-    index *= iterTarget;
+    unsigned long long strideStart = strideIdx * stride;    // index where this stride starts
 
-    if (index + iterTarget - 1 < n)
+    // last index in stride. accumulated value of stride always goes here
+    unsigned long long accumulatorIdx = strideStart + stride - 1;
+
+    if (accumulatorIdx >= paddedN)
     {
-        scan[index + iterTarget - 1] += scan[index + iterFactor - 1];
+        return;
     }
+
+    int accumulator = scan[accumulatorIdx];  // pre-fetch accumulator's value
+
+    // this new stride has swallowed two strides total
+    // siblingIdx is the index of the other stride that now no longer exists
+    unsigned long long siblingIdx = strideStart + prevStride - 1;  // doesn't depend on accumulator
+
+    scan[accumulatorIdx] = accumulator + scan[siblingIdx];
 }
 
-__global__ void kernel_efficientDownSweep(const int n, const int iter, int* scan)
+__global__ void kernel_efficientDownSweep(const unsigned long long paddedN,
+                                          const int STRIDE,
+                                          const int nextSTRIDE,  // nextStride == (stride / 2)
+                                          int* scan)
 {
-    int iterTarget = 1 << (iter + 1);
-    int iterFactor = 1 << iter;
+    int strideIdx = blockIdx.x * blockDim.x + threadIdx.x;
 
-    unsigned long long index = blockIdx.x * blockDim.x + threadIdx.x;
-    index = index * iterTarget;
+    unsigned long long strideStart = strideIdx * STRIDE;
 
-    if (index + iterTarget - 1 < n)
+    unsigned long long rightChildIdx = strideStart + STRIDE - 1;
+    if (rightChildIdx >= paddedN)
     {
-        int leftChild = scan[index + iterFactor - 1];
-        scan[index + iterFactor - 1] = scan[index + iterTarget - 1];
-        scan[index + iterTarget - 1] += leftChild;
+        return;
     }
+
+    int rightChild = scan[rightChildIdx];
+
+    // leftChild and rightChild are nextSTRIDE indices apart
+    unsigned long long leftChildIdx = strideStart + nextSTRIDE - 1;
+    int leftChild = scan[leftChildIdx];  // does not depend on first memory read
+
+    // give left child right child's value
+    // its value has not changed since the end of upsweep
+    // it has it easier than right child.
+    // on this update it now has accumulated vals of all strides of size nextSTRIDE, besides its own
+    scan[leftChildIdx] = rightChild;  // depends on first read, but not second
+
+    // right child currently contains accumulated vals of all strides of size STRIDE besodes its own
+    // adding the left child, which only contains values of one stride of size nextSTRIDE
+    // means that right child now also has accumulated vals of all strides of size nextSTRIDE
+    // besides its own (same status as leftChild)
+    scan[rightChildIdx] = rightChild + leftChild;  // memory writes do not depend on each other
+
+    // summary: at each layer, the updated elements get the value of all strides of size nextSTRIDE
+    // besides its own.
+    // so when nextSTRIDE == 1, then this element is done, and so are our iterations
 }
 
-// the inner operation of scan without timers and allocation
-void scanHelper(int numLayers, int paddedN, int* dev_scan)
+/*
+    the inner operation of scan without timers and allocation.
+    note: dev_scan should be pre-allocated to the padded power of two size
+*/
+void StreamCompaction::Efficient::scan(int n, int* dev_scan, const int blockSize)
 {
-    int blocks;
-    for (int i = 0; i <= numLayers - 1; i++)
+    // unsigned long long numLayers = ilog2ceil(n);
+    int numLayers = ilog2ceil(n);
+    unsigned long long paddedN = 1 << numLayers;  // pad to nearest power of 2
+
+    int prevStride = 1;                           // 1, 2, 4, 8, ... n/2
+    int stride = 2;  // essentially the amount of indices that are accumulated into 1 at this iter
+                     // 2, 4, 8, ... n
+    for (int iter = 0; iter < numLayers; iter++)
     {
-        blocks = divup(paddedN / (1 << (i + 1)), BLOCK_SIZE);
-        kernel_efficientUpSweep<<<blocks, BLOCK_SIZE>>>(paddedN, i, dev_scan);
+        // paddedN >> (iter + 1) == paddedN / (iter + 2) = the number of active threads in this iter
+        // n/2, n/4, n/8, ... 1
+        int blocks = divup(paddedN >> (iter + 1), BLOCK_SIZE);
+        kernel_efficientUpSweep<<<blocks, BLOCK_SIZE>>>(paddedN, stride, prevStride, dev_scan);
         checkCUDAError("Perform Work-Efficient Scan Up Sweep Iteration CUDA kernel failed.");
+
+        prevStride = stride;
+        stride = stride <<= 1;
     }
 
-    Common::kernel_setDeviceArrayValue<<<1, 1>>>(dev_scan, paddedN - 1, 0);
+    // set last value of dev_scan to 0
+    int replacement = 0;
+    cudaMemcpy(&dev_scan[paddedN - 1], &replacement, sizeof(int), cudaMemcpyHostToDevice);
 
-    for (int i = numLayers - 1; i >= 0; i--)
+    stride = paddedN;               // n, n/2, n/4, ... 2
+    int nextStride = paddedN >> 1;  // n/2, n/4, ... 1
+    for (int iter = numLayers; iter > 0; iter--)
     {
-        blocks = divup(paddedN / (1 << (i + 1)), BLOCK_SIZE);
-        kernel_efficientDownSweep<<<blocks, BLOCK_SIZE>>>(paddedN, i, dev_scan);
+        // paddedN >> iter == number of active threads in this iter. 1, 2, 4, 8, ... n/2
+        int blocks = divup(paddedN >> iter, BLOCK_SIZE);
+        kernel_efficientDownSweep<<<blocks, BLOCK_SIZE>>>(paddedN, stride, nextStride, dev_scan);
         checkCUDAError("Perform Work-Efficient Scan Down Sweep Iteration CUDA kernel failed.");
+
+        stride = nextStride;
+        nextStride >>= 1;  // n/2, n/4, n/8, n/16, ...
     }
 }
+
+/************************************************************************************************ */
 
 /**
  * Performs prefix-sum (aka scan) on idata, storing the result into odata.
  */
-void scan(int n, int* odata, const int* idata)
+void StreamCompaction::Efficient::scanWrapper(int n, int* odata, const int* idata)
 {
     unsigned long long numLayers = ilog2ceil(n);
     unsigned long long paddedN = 1 << ilog2ceil(n);
@@ -92,7 +147,7 @@ void scan(int n, int* odata, const int* idata)
         usingTimer = true;
     }
 
-    scanHelper(numLayers, paddedN, dev_scan);
+    scan(n, dev_scan, BLOCK_SIZE);
 
     if (usingTimer)
     {
@@ -113,7 +168,7 @@ void scan(int n, int* odata, const int* idata)
  * @param idata  The array of elements to compact.
  * @returns      The number of elements remaining after compaction.
  */
-int compact(int n, int* odata, const int* idata)
+int StreamCompaction::Efficient::compact(int n, int* odata, const int* idata)
 {
     // TODO: these arrays are unnecessary. will optimize soon.
 
@@ -146,7 +201,7 @@ int compact(int n, int* odata, const int* idata)
     int* indices = new int[n];  // create cpu side indices array
     int* bools = new int[n];
 
-    timer().startGpuTimer();
+    StreamCompaction::Efficient::timer().startGpuTimer();
 
     int blocks = divup(n, BLOCK_SIZE);
 
@@ -156,14 +211,14 @@ int compact(int n, int* odata, const int* idata)
     cudaMemcpy(bools, dev_bools, sizeof(int) * n, cudaMemcpyDeviceToHost);
     checkCUDAError("Memory copy from device bools to indices array failed.");
 
-    scan(n, indices, bools);
+    scanWrapper(n, indices, bools);
 
     cudaMemcpy(dev_indices, indices, sizeof(int) * n, cudaMemcpyHostToDevice);
     checkCUDAError("Memory copy from indices to device indices array failed.");
 
     Common::kernScatter<<<blocks, BLOCK_SIZE>>>(n, dev_odata, dev_idata, dev_bools, dev_indices);
 
-    timer().endGpuTimer();
+    StreamCompaction::Efficient::timer().endGpuTimer();
 
     cudaMemcpy(odata, dev_odata, sizeof(int) * n, cudaMemcpyDeviceToHost);
 
@@ -174,5 +229,3 @@ int compact(int n, int* odata, const int* idata)
 
     return indices[n - 1] + bools[n - 1];
 }
-}  // namespace Efficient
-}  // namespace StreamCompaction

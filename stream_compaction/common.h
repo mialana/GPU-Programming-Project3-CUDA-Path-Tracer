@@ -11,7 +11,7 @@
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
 
-#define BLOCK_SIZE 16
+#define BLOCK_SIZE 128
 
 /**
  * Check for CUDA errors; print and exit if there was a problem.
@@ -33,6 +33,8 @@ inline int ilog2(int x)
     return lg;
 }
 
+// calculates smallest possible integer k such that 2^k >= x
+// subtracts x from 1 in the case that we already have a power of 2
 inline int ilog2ceil(int x)
 {
     return x == 1 ? 0 : ilog2(x - 1) + 1;

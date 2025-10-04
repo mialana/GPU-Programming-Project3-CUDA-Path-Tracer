@@ -49,6 +49,7 @@ void Scene::loadFromJSON(const std::string& jsonName)
         } else if (p["TYPE"] == "Emitting")
         {
             const auto& col = p["RGB"];
+
             newMaterial.color = glm::vec4(col[0], col[1], col[2], 1.f);
             newMaterial.emittance = p["EMITTANCE"];
         } else if (p["TYPE"] == "Specular")

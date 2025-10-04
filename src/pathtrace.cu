@@ -254,7 +254,7 @@ __global__ void shadeFakeMaterial(int iter,
                                   Material* materials)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < num_paths)
+    if (idx < num_paths && pathSegments[idx].remainingBounces > 0)
     {
         ShadeableIntersection intersection = shadeableIntersections[idx];
         if (intersection.t > 0.0f)  // if the intersection exists...
@@ -282,9 +282,11 @@ __global__ void shadeFakeMaterial(int iter,
             {
                 float lightTerm = glm::dot(intersection.surfaceNormal, glm::vec3(0.0f, 1.0f, 0.0f));
                 // use `interactions::scatterRay` to calculate bsdf value
+                // offset ray by EPSILON
                 scatterRay(pathSegments[idx],
-                           pathSegments[idx].ray.origin
-                               + (intersection.t * pathSegments[idx].ray.direction),
+                           (pathSegments[idx].ray.origin
+                            + (intersection.t * pathSegments[idx].ray.direction))
+                               + (intersection.surfaceNormal * EPSILON),
                            intersection.surfaceNormal,
                            material,
                            rng);
@@ -297,7 +299,7 @@ __global__ void shadeFakeMaterial(int iter,
             // This can be useful for post-processing and image compositing.
         } else
         {
-            pathSegments[idx].color.a = 0.f;
+            pathSegments[idx].color = glm::vec4(0.f);
             pathSegments[idx].remainingBounces = 0;
         }
     }
@@ -399,27 +401,32 @@ void pathtrace(uchar4* pbo, int frame, int iter)
     PathSegment* dev_path_end = dev_paths + pixelcount;
     int num_paths = dev_path_end - dev_paths;
 
+    unsigned paddedN = ilog2ceil(num_paths);
+
     // Allocate memory for keys and values of radix sort on the device
-    int* dev_keys[2];
-    int* dev_values[2];
-    int* dev_scan;
+    int* dev_ikeys;
+    int* dev_okeys;
+    int* dev_ivalues;
+    int* dev_ovalues;
+    int* dev_blockSums;
     int* dev_indices;
 
-    cudaMalloc(&dev_keys[0], num_paths * sizeof(int));
-    checkCUDAError("cudaMalloc dev_keys[0]");
-    cudaMalloc(&dev_keys[1], num_paths * sizeof(int));
-    checkCUDAError("cudaMalloc dev_keys[1]");
+    cudaMalloc(&dev_ikeys, paddedN * sizeof(int));
+    checkCUDAError("cudaMalloc dev_ikeys");
+    cudaMalloc(&dev_okeys, paddedN * sizeof(int));
+    checkCUDAError("cudaMalloc dev_okeys");
 
-    cudaMalloc(&dev_values[0], num_paths * sizeof(int));
-    checkCUDAError("cudaMalloc dev_values[0]");
-    cudaMalloc(&dev_values[1], num_paths * sizeof(int));
-    checkCUDAError("cudaMalloc dev_values[1]");
+    cudaMalloc(&dev_ivalues, paddedN * sizeof(int));
+    checkCUDAError("cudaMalloc dev_ivalues");
+    cudaMalloc(&dev_ovalues, paddedN * sizeof(int));
+    checkCUDAError("cudaMalloc dev_ovalues");
 
-    cudaMalloc(&dev_scan, num_paths * sizeof(int));
-    checkCUDAError("cudaMalloc dev_scan");
+    cudaMalloc(&dev_blockSums, sizeof(int) * divup(paddedN, 2 * blockSize1d));
 
     cudaMalloc(&dev_indices, num_paths * sizeof(int));
     checkCUDAError("cudaMalloc dev_indices");
+
+    int* keys = new int[num_paths];
 
     // --- PathSegment Tracing Stage ---
     // Shoot ray into scene, bounce between objects, push shading chunks
@@ -460,34 +467,41 @@ void pathtrace(uchar4* pbo, int frame, int iter)
         checkCUDAError("shade fake material");
         cudaDeviceSynchronize();
 
-        _extractRemainingBounces<<<numblocksPathSegmentTracing, blockSize1d>>>(num_paths,
-                                                                               dev_keys[0],
-                                                                               dev_paths);
+        // _extractRemainingBounces<<<numblocksPathSegmentTracing, blockSize1d>>>(num_paths,
+        //                                                                        dev_ikeys,
+        //                                                                        dev_paths);
 
-        checkCUDAError("extractRemainingBounces");
+        // checkCUDAError("extractRemainingBounces");
 
-        _fillBufferWithIndices<<<numblocksPathSegmentTracing, blockSize1d>>>(num_paths, dev_values[0]);
-        checkCUDAError("fill buffer with indices");
+        // _fillBufferWithIndices<<<numblocksPathSegmentTracing, blockSize1d>>>(num_paths, dev_ivalues);
+        // checkCUDAError("fill buffer with indices");
 
-        // Sort dev_paths by remainingBounces using StreamCompaction::Radix::sortByKeyInternal
-        StreamCompaction::Radix::sortByKey<int>(num_paths,
-                                                        dev_keys,
-                                                        dev_values,
-                                                        dev_scan,
-                                                        dev_indices,
-                                                        ilog2ceil(traceDepth));
-        checkCUDAError("StreamCompaction::Radix::sortByKeyInternal");
-        cudaDeviceSynchronize();
+        // // Sort dev_paths by remainingBounces using StreamCompaction::Radix::sortByKey
+        // // StreamCompaction::Radix::sortByKey(num_paths,
+        // //                                    dev_ikeys,
+        // //                                    dev_okeys,
+        // //                                    dev_ivalues,
+        // //                                    dev_ovalues,
+        // //                                    dev_blockSums,
+        // //                                    dev_indices,
+        // //                                    ilog2ceil(traceDepth),
+        // //                                    blockSize2d);
+        // checkCUDAError("StreamCompaction::Radix::sortByKey");
+        // cudaDeviceSynchronize();
 
-        _sortByIndices<PathSegment>
-            <<<numblocksPathSegmentTracing, blockSize1d>>>(num_paths, dev_paths, dev_values[1]);
+        // _sortByIndices<PathSegment>
+        //     <<<numblocksPathSegmentTracing, blockSize1d>>>(num_paths, dev_paths, dev_ovalues);
 
-        _sortByIndices<ShadeableIntersection>
-            <<<numblocksPathSegmentTracing, blockSize1d>>>(num_paths, dev_intersections, dev_values[1]);
+        // _sortByIndices<ShadeableIntersection>
+        //     <<<numblocksPathSegmentTracing, blockSize1d>>>(num_paths,
+        //                                                    dev_intersections,
+        //                                                    dev_ovalues);
 
-        int lastKey;  // Host variable to store the last key
-        cudaMemcpy(&lastKey, &dev_keys[1][num_paths - 1], sizeof(int), cudaMemcpyDeviceToHost);
-        checkCUDAError("cudaMemcpy lastKey");
+        int lastKey = 0;  // Host variable to store the last key
+        // cudaMemcpy(&lastKey, &dev_okeys[num_paths - 1], sizeof(int), cudaMemcpyDeviceToHost);
+        // checkCUDAError("cudaMemcpy lastKey");
+
+        // cudaMemcpy(keys, dev_okeys, sizeof(int) * num_paths, cudaMemcpyDeviceToHost);
 
         iterationComplete = (lastKey == 0);  // based off stream compaction results.
 
@@ -514,10 +528,10 @@ void pathtrace(uchar4* pbo, int frame, int iter)
 
     checkCUDAError("pathtrace");
 
-    cudaFree(dev_keys[0]);
-    cudaFree(dev_keys[1]);
-    cudaFree(dev_values[0]);
-    cudaFree(dev_values[1]);
-    cudaFree(dev_scan);
+    cudaFree(dev_ikeys);
+    cudaFree(dev_okeys);
+    cudaFree(dev_ivalues);
+    cudaFree(dev_ovalues);
+    cudaFree(dev_blockSums);
     cudaFree(dev_indices);
 }

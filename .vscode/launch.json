@@ -3,22 +3,11 @@
     "configurations": [
         {
             "name": "CUDA C++: Launch",
-            "preLaunchTask": "CMake: build",
             "type": "cuda-gdb",
             "request": "launch",
             "program": "${command:cmake.launchTargetPath}",
             "cwd": "${workspaceFolder}",
-            "environment": [
-                {
-                    "name": "XDG_SESSION_TYPE",
-                    "value": "x11"
-                },
-                {
-                    "name": "WAYLAND_DISPLAY",
-                    "value": "''"
-                }
-            ],
-            "args": ["./scenes/sphere.json"]
+            "environment": []
         }
     ]
 }

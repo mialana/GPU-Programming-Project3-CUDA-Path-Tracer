@@ -24,6 +24,9 @@
 #include <sstream>
 #include <string>
 
+#define WAYLAND_DISPLAY ''
+#define XDG_SESSION_TYPE x11
+
 static std::string startTimeString;
 
 // For camera controls
@@ -343,6 +346,9 @@ void mainLoop()
 
 int main(int argc, char** argv)
 {
+    setenv("WAYLAND_DISPLAY", "", 1); // for linux wayland runtime
+    setenv("XDG_SESSION_TYPE", "x11", 1); // for linux wayland runtime
+
     startTimeString = currentTimeString();
 
     if (argc < 2)
@@ -413,7 +419,7 @@ void saveImage()
 
     std::string filename = renderState->imageName;
     std::ostringstream ss;
-    ss << filename << "." << startTimeString << "." << samples << "samp";
+    ss << "img/export/" << filename << "." << startTimeString << "." << samples << "samp";
     filename = ss.str();
 
     // CHECKITOUT
