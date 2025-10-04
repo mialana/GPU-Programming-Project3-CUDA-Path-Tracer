@@ -7,7 +7,8 @@
             "request": "launch",
             "program": "${command:cmake.launchTargetPath}",
             "cwd": "${workspaceFolder}",
-            "environment": []
+            "environment": [],
+            "args": ["scenes/sphere.json"]
         }
     ]
 }

@@ -62,6 +62,9 @@ GuiDataContainer* imguiData = NULL;
 ImGuiIO* io = nullptr;
 bool mouseOverImGuiWinow = false;
 
+// Add a cudaGraphicsResource at global scope:
+cudaGraphicsResource* cuda_pbo_resource = nullptr;
+
 // Forward declarations for window loop and interactivity
 void runCuda();
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
@@ -144,8 +147,10 @@ void deletePBO(GLuint* pbo)
     if (pbo)
     {
         // unregister this buffer object with CUDA
-        cudaGLUnregisterBufferObject(*pbo);
-
+        if (cuda_pbo_resource) {
+            cudaGraphicsUnregisterResource(cuda_pbo_resource);
+            cuda_pbo_resource = nullptr;
+        }
         glBindBuffer(GL_ARRAY_BUFFER, *pbo);
         glDeleteBuffers(1, pbo);
 
@@ -173,10 +178,7 @@ void cleanupCuda()
 
 void initCuda()
 {
-    cudaGLSetGLDevice(0);
-
-    // Clean up on program exit
-    atexit(cleanupCuda);
+    cudaSetDevice(0);
 }
 
 void initPBO()
@@ -194,7 +196,8 @@ void initPBO()
 
     // Allocate data for the buffer. 4-channel 8-bit image
     glBufferData(GL_PIXEL_UNPACK_BUFFER, size_tex_data, NULL, GL_DYNAMIC_COPY);
-    cudaGLRegisterBufferObject(pbo);
+
+    cudaGraphicsGLRegisterBuffer(&cuda_pbo_resource, pbo, cudaGraphicsMapFlagsWriteDiscard);
 }
 
 void errorCallback(int error, const char* description)
@@ -331,7 +334,8 @@ void mainLoop()
 
         glfwSwapBuffers(window);
     }
-
+    cleanupCuda();
+    
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
@@ -461,16 +465,19 @@ void runCuda()
 
     if (iteration < renderState->iterations)
     {
-        uchar4* pbo_dptr = NULL;
-        iteration++;
-        cudaGLMapBufferObject((void**)&pbo_dptr, pbo);
+        size_t num_bytes;
+        uchar4* pbo_dptr = nullptr;
+
+        cudaGraphicsMapResources(1, &cuda_pbo_resource, 0);
+        cudaGraphicsResourceGetMappedPointer((void**)&pbo_dptr, &num_bytes, cuda_pbo_resource);
 
         // execute the kernel
         int frame = 0;
+        iteration++;
         pathtrace(pbo_dptr, frame, iteration);
 
         // unmap buffer object
-        cudaGLUnmapBufferObject(pbo);
+        cudaGraphicsUnmapResources(1, &cuda_pbo_resource, 0);
     } else
     {
         saveImage();
