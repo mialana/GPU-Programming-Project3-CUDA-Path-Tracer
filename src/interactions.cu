@@ -4,11 +4,8 @@
 
 #include <thrust/random.h>
 
-#include <curand.h>
-
 __host__ __device__ glm::vec3 calculateRandomDirectionInHemisphere(
-    glm::vec3 normal,
-    thrust::random::linear_congruential_engine<unsigned int, 48271, 0, 2147483647>& rng)
+    glm::vec3 normal, thrust::default_random_engine& rng)
 {
     thrust::uniform_real_distribution<float> u01(0, 1);
 
@@ -41,20 +38,13 @@ __host__ __device__ glm::vec3 calculateRandomDirectionInHemisphere(
            + sin(around) * over * perpendicularDirection2;
 }
 
-__host__ __device__ void scatterRay(
-    PathSegment& pathSegment,
-    glm::vec3 intersect,
-    glm::vec3 normal,
-    const Material& m,
-    thrust::random::linear_congruential_engine<unsigned int, 48271, 0, 2147483647>& rng)
+__host__ __device__ void scatterRay(PathSegment& pathSegment,
+                                    glm::vec3 intersect,
+                                    glm::vec3 normal,
+                                    const Material& m,
+                                    thrust::default_random_engine& rng)
 {
     // TODO: implement this.
     // A basic implementation of pure-diffuse shading will just call the
     // calculateRandomDirectionInHemisphere defined above.
-    pathSegment.ray.direction = calculateRandomDirectionInHemisphere(normal, rng);
-    pathSegment.ray.origin = intersect;
-
-    pathSegment.color = m.color;
-
-    pathSegment.remainingBounces--;
 }

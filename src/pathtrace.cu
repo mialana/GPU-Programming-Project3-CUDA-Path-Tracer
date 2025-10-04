@@ -1,4 +1,3 @@
-#include "glm/detail/type_vec.hpp"
 #include "pathtrace.h"
 
 #include <cstdio>
@@ -8,11 +7,10 @@
 #include <thrust/random.h>
 #include <thrust/remove.h>
 
+#include "sceneStructs.h"
 #include "scene.h"
 #include "glm/glm.hpp"
 #include "glm/gtx/norm.hpp"
-#include "src/sceneStructs.h"
-#include "stream_compaction/radix.h"
 #include "utilities.h"
 #include "intersections.h"
 #include "interactions.h"
@@ -20,10 +18,9 @@
 #define ERRORCHECK 1
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
-
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
 
-inline void checkCUDAErrorFn(const char* msg, const char* file, int line)
+void checkCUDAErrorFn(const char* msg, const char* file, int line)
 {
 #if ERRORCHECK
     cudaDeviceSynchronize();
@@ -46,12 +43,12 @@ inline void checkCUDAErrorFn(const char* msg, const char* file, int line)
 #endif  // ERRORCHECK
 }
 
-__host__ __device__ thrust::random::linear_congruential_engine<unsigned int, 48271, 0, 2147483647>
-makeSeededRandomEngine(int iter, int index, int depth)
+__host__ __device__ thrust::default_random_engine makeSeededRandomEngine(int iter,
+                                                                         int index,
+                                                                         int depth)
 {
     int h = utilhash((1 << 31) | (depth << 22) | iter) ^ utilhash(index);
-
-    return thrust::random::linear_congruential_engine<unsigned int, 48271, 0, 2147483647>(h);
+    return thrust::default_random_engine(h);
 }
 
 // Kernel that writes the image to the OpenGL PBO directly.
@@ -160,7 +157,7 @@ __global__ void generateRayFromCamera(Camera cam,
         PathSegment& segment = pathSegments[index];
 
         segment.ray.origin = cam.position;
-        segment.color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+        segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
 
         // TODO: implement antialiasing by jittering the ray
         segment.ray.direction = glm::normalize(
@@ -254,7 +251,7 @@ __global__ void shadeFakeMaterial(int iter,
                                   Material* materials)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < num_paths && pathSegments[idx].remainingBounces > 0)
+    if (idx < num_paths)
     {
         ShadeableIntersection intersection = shadeableIntersections[idx];
         if (intersection.t > 0.0f)  // if the intersection exists...
@@ -262,18 +259,16 @@ __global__ void shadeFakeMaterial(int iter,
             // Set up the RNG
             // LOOK: this is how you use thrust's RNG! Please look at
             // makeSeededRandomEngine as well.
-            thrust::random::linear_congruential_engine<unsigned int, 48271, 0, 2147483647> rng
-                = makeSeededRandomEngine(iter, idx, 0);
+            thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
             thrust::uniform_real_distribution<float> u01(0, 1);
 
             Material material = materials[intersection.materialId];
-            glm::vec4 materialColor = material.color;
+            glm::vec3 materialColor = material.color;
 
             // If the material indicates that the object was a light, "light" the ray
             if (material.emittance > 0.0f)
             {
                 pathSegments[idx].color *= (materialColor * material.emittance);
-                pathSegments[idx].remainingBounces = 0;
             }
             // Otherwise, do some pseudo-lighting computation. This is actually more
             // like what you would expect from shading in a rasterizer like OpenGL.
@@ -281,17 +276,10 @@ __global__ void shadeFakeMaterial(int iter,
             else
             {
                 float lightTerm = glm::dot(intersection.surfaceNormal, glm::vec3(0.0f, 1.0f, 0.0f));
-                // use `interactions::scatterRay` to calculate bsdf value
-                // offset ray by EPSILON
-                scatterRay(pathSegments[idx],
-                           (pathSegments[idx].ray.origin
-                            + (intersection.t * pathSegments[idx].ray.direction))
-                               + (intersection.surfaceNormal * EPSILON),
-                           intersection.surfaceNormal,
-                           material,
-                           rng);
-
-                pathSegments[idx].color *= lightTerm / INV_PI;
+                pathSegments[idx].color *= (materialColor * lightTerm) * 0.3f
+                                           + ((1.0f - intersection.t * 0.02f) * materialColor)
+                                                 * 0.7f;
+                pathSegments[idx].color *= u01(rng);  // apply some noise because why not
             }
             // If there was no intersection, color the ray black.
             // Lots of renderers use 4 channel color, RGBA, where A = alpha, often
@@ -299,8 +287,7 @@ __global__ void shadeFakeMaterial(int iter,
             // This can be useful for post-processing and image compositing.
         } else
         {
-            pathSegments[idx].color = glm::vec4(0.f);
-            pathSegments[idx].remainingBounces = 0;
+            pathSegments[idx].color = glm::vec3(0.0f);
         }
     }
 }
@@ -313,35 +300,7 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
     if (index < nPaths)
     {
         PathSegment iterationPath = iterationPaths[index];
-        image[iterationPath.pixelIndex] += glm::vec3(iterationPath.color);
-    }
-}
-
-__global__ void _extractRemainingBounces(int n, int* keys, const PathSegment* paths)
-{
-    int index = blockIdx.x * blockDim.x + threadIdx.x;
-    if (index < n)
-    {
-        keys[index] = paths[index].remainingBounces;
-    }
-}
-
-__global__ void _fillBufferWithIndices(int n, int* buf)
-{
-    int index = blockIdx.x * blockDim.x + threadIdx.x;
-    if (index < n)
-    {
-        buf[index] = index;
-    }
-}
-
-template<typename T>
-__global__ void _sortByIndices(int n, T* objects, const int* indices)
-{
-    int index = blockIdx.x * blockDim.x + threadIdx.x;
-    if (index < n)
-    {
-        objects[indices[index]] = objects[index];
+        image[iterationPath.pixelIndex] += iterationPath.color;
     }
 }
 
@@ -401,33 +360,6 @@ void pathtrace(uchar4* pbo, int frame, int iter)
     PathSegment* dev_path_end = dev_paths + pixelcount;
     int num_paths = dev_path_end - dev_paths;
 
-    unsigned paddedN = ilog2ceil(num_paths);
-
-    // Allocate memory for keys and values of radix sort on the device
-    int* dev_ikeys;
-    int* dev_okeys;
-    int* dev_ivalues;
-    int* dev_ovalues;
-    int* dev_blockSums;
-    int* dev_indices;
-
-    cudaMalloc(&dev_ikeys, paddedN * sizeof(int));
-    checkCUDAError("cudaMalloc dev_ikeys");
-    cudaMalloc(&dev_okeys, paddedN * sizeof(int));
-    checkCUDAError("cudaMalloc dev_okeys");
-
-    cudaMalloc(&dev_ivalues, paddedN * sizeof(int));
-    checkCUDAError("cudaMalloc dev_ivalues");
-    cudaMalloc(&dev_ovalues, paddedN * sizeof(int));
-    checkCUDAError("cudaMalloc dev_ovalues");
-
-    cudaMalloc(&dev_blockSums, sizeof(int) * divup(paddedN, 2 * blockSize1d));
-
-    cudaMalloc(&dev_indices, num_paths * sizeof(int));
-    checkCUDAError("cudaMalloc dev_indices");
-
-    int* keys = new int[num_paths];
-
     // --- PathSegment Tracing Stage ---
     // Shoot ray into scene, bounce between objects, push shading chunks
 
@@ -463,47 +395,7 @@ void pathtrace(uchar4* pbo, int frame, int iter)
                                                                         dev_intersections,
                                                                         dev_paths,
                                                                         dev_materials);
-
-        checkCUDAError("shade fake material");
-        cudaDeviceSynchronize();
-
-        // _extractRemainingBounces<<<numblocksPathSegmentTracing, blockSize1d>>>(num_paths,
-        //                                                                        dev_ikeys,
-        //                                                                        dev_paths);
-
-        // checkCUDAError("extractRemainingBounces");
-
-        // _fillBufferWithIndices<<<numblocksPathSegmentTracing, blockSize1d>>>(num_paths, dev_ivalues);
-        // checkCUDAError("fill buffer with indices");
-
-        // // Sort dev_paths by remainingBounces using StreamCompaction::Radix::sortByKey
-        // // StreamCompaction::Radix::sortByKey(num_paths,
-        // //                                    dev_ikeys,
-        // //                                    dev_okeys,
-        // //                                    dev_ivalues,
-        // //                                    dev_ovalues,
-        // //                                    dev_blockSums,
-        // //                                    dev_indices,
-        // //                                    ilog2ceil(traceDepth),
-        // //                                    blockSize2d);
-        // checkCUDAError("StreamCompaction::Radix::sortByKey");
-        // cudaDeviceSynchronize();
-
-        // _sortByIndices<PathSegment>
-        //     <<<numblocksPathSegmentTracing, blockSize1d>>>(num_paths, dev_paths, dev_ovalues);
-
-        // _sortByIndices<ShadeableIntersection>
-        //     <<<numblocksPathSegmentTracing, blockSize1d>>>(num_paths,
-        //                                                    dev_intersections,
-        //                                                    dev_ovalues);
-
-        int lastKey = 0;  // Host variable to store the last key
-        // cudaMemcpy(&lastKey, &dev_okeys[num_paths - 1], sizeof(int), cudaMemcpyDeviceToHost);
-        // checkCUDAError("cudaMemcpy lastKey");
-
-        // cudaMemcpy(keys, dev_okeys, sizeof(int) * num_paths, cudaMemcpyDeviceToHost);
-
-        iterationComplete = (lastKey == 0);  // based off stream compaction results.
+        iterationComplete = true;  // TODO: should be based off stream compaction results.
 
         if (guiData != NULL)
         {
@@ -527,11 +419,4 @@ void pathtrace(uchar4* pbo, int frame, int iter)
                cudaMemcpyDeviceToHost);
 
     checkCUDAError("pathtrace");
-
-    cudaFree(dev_ikeys);
-    cudaFree(dev_okeys);
-    cudaFree(dev_ivalues);
-    cudaFree(dev_ovalues);
-    cudaFree(dev_blockSums);
-    cudaFree(dev_indices);
 }

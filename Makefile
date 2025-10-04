@@ -20,4 +20,4 @@ Debug:
 	${CMAKE} --build --preset aliu-$@ && ./build/bin/$@/cis565_path_tracer ./scenes/sphere.json
 
 Release:
-	${CMAKE} --build --preset aliu-$@ && WAYLAND_DISPLAY='' XDG_SESSION_TYPE=x11 ./build/bin/$@/cis565_path_tracer ./scenes/sphere.json
+	${CMAKE} --build --preset aliu-$@ && ./build/bin/$@/cis565_path_tracer ./scenes/sphere.json
