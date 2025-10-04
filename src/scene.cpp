@@ -91,6 +91,9 @@ void Scene::loadFromJSON(const std::string& jsonName)
     RenderState& state = this->state;
     camera.resolution.x = cameraData["RES"][0];
     camera.resolution.y = cameraData["RES"][1];
+    camera.invResolution.x = cameraData["INV_RES"][0];
+    camera.invResolution.y = cameraData["INV_RES"][1];
+
     float fovy = cameraData["FOVY"];
     state.iterations = cameraData["ITERATIONS"];
     state.traceDepth = cameraData["DEPTH"];

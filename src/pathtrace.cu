@@ -43,6 +43,11 @@ void checkCUDAErrorFn(const char* msg, const char* file, int line)
 #endif  // ERRORCHECK
 }
 
+inline unsigned divup(unsigned size, unsigned div)
+{
+    return (size + div - 1) / div;
+}
+
 __host__ __device__ thrust::default_random_engine makeSeededRandomEngine(int iter,
                                                                          int index,
                                                                          int depth)
@@ -52,15 +57,17 @@ __host__ __device__ thrust::default_random_engine makeSeededRandomEngine(int ite
 }
 
 // Kernel that writes the image to the OpenGL PBO directly.
-__global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution, int iter, glm::vec3* image)
+__global__ void sendImageToPBO(
+    uchar4* pbo, glm::ivec2 resolution, glm::vec2 invResolution, int iter, glm::vec3* image)
 {
-    int x = (blockIdx.x * blockDim.x) + threadIdx.x;
-    int y = (blockIdx.y * blockDim.y) + threadIdx.y;
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+
+    int y = (int)(tid * invResolution.x);
+    int x = tid - y * resolution.x;
 
     if (x < resolution.x && y < resolution.y)
     {
-        int index = x + (y * resolution.x);
-        glm::vec3 pix = image[index];
+        glm::vec3 pix = image[tid];
 
         glm::ivec3 color;
         color.x = glm::clamp((int)(pix.x / iter * 255.0), 0, 255);
@@ -68,10 +75,10 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution, int iter, glm
         color.z = glm::clamp((int)(pix.z / iter * 255.0), 0, 255);
 
         // Each thread writes one pixel location in the texture (textel)
-        pbo[index].w = 0;
-        pbo[index].x = color.x;
-        pbo[index].y = color.y;
-        pbo[index].z = color.z;
+        pbo[tid].w = 0;
+        pbo[tid].x = color.x;
+        pbo[tid].y = color.y;
+        pbo[tid].z = color.z;
     }
 }
 
@@ -148,23 +155,28 @@ __global__ void generateRayFromCamera(Camera cam,
                                       int traceDepth,
                                       PathSegment* pathSegments)
 {
-    int x = (blockIdx.x * blockDim.x) + threadIdx.x;
-    int y = (blockIdx.y * blockDim.y) + threadIdx.y;
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+
+    int y = (int)(tid * cam.invResolution.x);
+    int x = tid - y * cam.resolution.x;
 
     if (x < cam.resolution.x && y < cam.resolution.y)
     {
-        int index = x + (y * cam.resolution.x);
-        PathSegment& segment = pathSegments[index];
+        thrust::default_random_engine rng = makeSeededRandomEngine(iter, tid, 0);
+        thrust::uniform_real_distribution<float> u01(0, 1);
+        
+        PathSegment& segment = pathSegments[tid];
 
         segment.ray.origin = cam.position;
         segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
 
         // TODO: implement antialiasing by jittering the ray
+
         segment.ray.direction = glm::normalize(
             cam.view - cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f)
             - cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f));
 
-        segment.pixelIndex = index;
+        segment.pixelIndex = tid;
         segment.remainingBounces = traceDepth;
     }
 }
@@ -322,6 +334,8 @@ void pathtrace(uchar4* pbo, int frame, int iter)
     // 1D block for path tracing
     const int blockSize1d = 128;
 
+    dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
+
     ///////////////////////////////////////////////////////////////////////////
 
     // Recap:
@@ -353,7 +367,7 @@ void pathtrace(uchar4* pbo, int frame, int iter)
 
     // TODO: perform one iteration of path tracing
 
-    generateRayFromCamera<<<blocksPerGrid2d, blockSize2d>>>(cam, iter, traceDepth, dev_paths);
+    generateRayFromCamera<<<numBlocksPixels, blockSize1d>>>(cam, iter, traceDepth, dev_paths);
     checkCUDAError("generate camera ray");
 
     int depth = 0;
@@ -404,13 +418,16 @@ void pathtrace(uchar4* pbo, int frame, int iter)
     }
 
     // Assemble this iteration and apply it to the image
-    dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
     finalGather<<<numBlocksPixels, blockSize1d>>>(num_paths, dev_image, dev_paths);
 
     ///////////////////////////////////////////////////////////////////////////
 
     // Send results to OpenGL buffer for rendering
-    sendImageToPBO<<<blocksPerGrid2d, blockSize2d>>>(pbo, cam.resolution, iter, dev_image);
+    sendImageToPBO<<<numBlocksPixels, blockSize1d>>>(pbo,
+                                                     cam.resolution,
+                                                     cam.invResolution,
+                                                     iter,
+                                                     dev_image);
 
     // Retrieve image from GPU
     cudaMemcpy(hst_scene->state.image.data(),

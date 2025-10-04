@@ -48,6 +48,7 @@ struct Material
 struct Camera
 {
     glm::ivec2 resolution;
+    glm::vec2 invResolution;
     glm::vec3 position;
     glm::vec3 lookAt;
     glm::vec3 view;
