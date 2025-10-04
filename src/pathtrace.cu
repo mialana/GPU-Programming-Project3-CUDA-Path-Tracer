@@ -164,17 +164,23 @@ __global__ void generateRayFromCamera(Camera cam,
     {
         thrust::default_random_engine rng = makeSeededRandomEngine(iter, tid, 0);
         thrust::uniform_real_distribution<float> u01(0, 1);
-        
+
         PathSegment& segment = pathSegments[tid];
 
         segment.ray.origin = cam.position;
         segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
 
-        // TODO: implement antialiasing by jittering the ray
+        // currently, ray only lands at origin of each pixel. 
+        // jittering within each pixel effectively creates an anti-aliasing effect.
+        const float jitterAmt_x = u01(rng) * cam.pixelLength.x;
+        const float jitterAmt_y = u01(rng) * cam.pixelLength.y;
 
         segment.ray.direction = glm::normalize(
-            cam.view - cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f)
-            - cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f));
+            cam.view
+            - cam.right * cam.pixelLength.x
+                  * (((float)x + jitterAmt_x) - (float)cam.resolution.x * 0.5f)
+            - cam.up * cam.pixelLength.y
+                  * (((float)y + jitterAmt_y) - (float)cam.resolution.y * 0.5f));
 
         segment.pixelIndex = tid;
         segment.remainingBounces = traceDepth;
