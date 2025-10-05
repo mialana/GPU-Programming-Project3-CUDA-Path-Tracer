@@ -13,6 +13,7 @@
 #include "ImGui/imgui.h"
 #include "ImGui/imgui_impl_glfw.h"
 #include "ImGui/imgui_impl_opengl3.h"
+#include "ImGui/imfilebrowser.h"
 
 #include <cuda_runtime.h>
 #include <cuda_gl_interop.h>
@@ -47,6 +48,8 @@ GuiDataContainer* guiData;
 RenderState* renderState;
 int iteration;
 bool isInitial;
+
+ImGui::FileBrowser fileDialog;
 
 int width;
 int height;
@@ -261,6 +264,9 @@ bool init()
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 120");
 
+    fileDialog.SetTitle("Scene File Picker");
+    fileDialog.SetTypeFilters({".json"});
+
     // Initialize other stuff
     initVAO();
     initTextures();
@@ -272,6 +278,38 @@ bool init()
     glActiveTexture(GL_TEXTURE0);
 
     return true;
+}
+
+void mainSetup(std::string sceneFile)
+{
+    // Load scene file
+    scene = new Scene(sceneFile);
+
+    // Set up camera stuff from loaded path tracer settings
+    iteration = 0;
+    isInitial = true;
+    renderState = &scene->state;
+    Camera& cam = renderState->camera;
+    width = cam.resolution.x;
+    height = cam.resolution.y;
+
+    glm::vec3 view = cam.view;
+    glm::vec3 up = cam.up;
+    glm::vec3 right = glm::cross(view, up);
+    up = glm::cross(right, view);
+
+    cameraPosition = cam.position;
+
+    // compute phi (horizontal) and theta (vertical) relative 3D axis
+    // so, (0 0 1) is forward, (0 1 0) is up
+    glm::vec3 viewXZ = glm::vec3(view.x, 0.0f, view.z);
+    glm::vec3 viewZY = glm::vec3(0.0f, view.y, view.z);
+    phi = glm::acos(glm::dot(glm::normalize(viewXZ), glm::vec3(0, 0, -1)));
+    theta = glm::acos(glm::dot(glm::normalize(viewZY), glm::vec3(0, 1, 0)));
+    ogLookAt = cam.lookAt;
+    zoom = glm::length(cam.position - ogLookAt);
+
+    camchanged = true;
 }
 
 void InitImguiData(GuiDataContainer* guiData)
@@ -288,15 +326,23 @@ void RenderImGui()
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    ImGui::SetNextWindowSize(ImVec2(400, 150), ImGuiCond_Appearing);
+    ImGui::SetNextWindowSize(ImVec2(400, 200), ImGuiCond_Appearing);
 
     ImGui::Begin(
         "Path Tracer Analytics");  // Create a window called "Hello, world!" and append into it.
+
+    ImGui::Text(guiData->sceneFile.c_str());
+    if (ImGui::Button("Select File"))
+    {
+        fileDialog.Open();
+    }
+
     ImGui::Text("Traced Depth %d", imguiData->TracedDepth);
     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
                 1000.0f / ImGui::GetIO().Framerate,
                 ImGui::GetIO().Framerate);
     ImGui::Separator();
+
     if (ImGui::Checkbox("Sort by Material", &imguiData->SortByMaterial))
     {
         camchanged = true;
@@ -310,6 +356,17 @@ void RenderImGui()
     ImGui::Separator();
 
     ImGui::End();
+
+    fileDialog.Display();
+
+    if (fileDialog.HasSelected())
+    {
+        guiData->sceneFile = fileDialog.GetSelected().string();
+
+        mainSetup(guiData->sceneFile);
+
+        fileDialog.ClearSelected();
+    }
 
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -370,43 +427,22 @@ int main(int argc, char** argv)
 
     startTimeString = currentTimeString();
 
-    if (argc < 2)
-    {
-        printf("Usage: %s SCENEFILE.json\n", argv[0]);
-        return 1;
-    }
-
-    const char* sceneFile = argv[1];
-
-    // Load scene file
-    scene = new Scene(sceneFile);
-
     // Create Instance for ImGUIData
     guiData = new GuiDataContainer();
 
-    // Set up camera stuff from loaded path tracer settings
-    iteration = 0;
-    isInitial = true;
-    renderState = &scene->state;
-    Camera& cam = renderState->camera;
-    width = cam.resolution.x;
-    height = cam.resolution.y;
+    std::string sceneFile;
 
-    glm::vec3 view = cam.view;
-    glm::vec3 up = cam.up;
-    glm::vec3 right = glm::cross(view, up);
-    up = glm::cross(right, view);
+    if (argc < 2)
+    {
+        sceneFile = guiData->sceneFile; // use default scene if no arg given
+    } else
+    {
+        sceneFile = argv[1]; // override default scene
+    }
 
-    cameraPosition = cam.position;
-
-    // compute phi (horizontal) and theta (vertical) relative 3D axis
-    // so, (0 0 1) is forward, (0 1 0) is up
-    glm::vec3 viewXZ = glm::vec3(view.x, 0.0f, view.z);
-    glm::vec3 viewZY = glm::vec3(0.0f, view.y, view.z);
-    phi = glm::acos(glm::dot(glm::normalize(viewXZ), glm::vec3(0, 0, -1)));
-    theta = glm::acos(glm::dot(glm::normalize(viewZY), glm::vec3(0, 1, 0)));
-    ogLookAt = cam.lookAt;
-    zoom = glm::length(cam.position - ogLookAt);
+    mainSetup(sceneFile);
+    
+    guiData->sceneFile = sceneFile; // set guiData
 
     // Initialize CUDA and GL components
     init();

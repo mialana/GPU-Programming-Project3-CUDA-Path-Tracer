@@ -16,17 +16,26 @@
 #define EPSILON 0.00001f
 #define INV_PI 0.31830988618379067154f
 
+#define VALUE(string) #string
+#define TO_LITERAL(string) VALUE(string)
+#define APPEND_TO_LITERAL(string, suffix) VALUE(string) suffix
+
 class GuiDataContainer
 {
 public:
     GuiDataContainer()
-        : TracedDepth(0), SortByMaterial(true), SortingThreshold(5000), SortingPeriod(3)
+        : TracedDepth(0)
+        , SortByMaterial(true)
+        , SortingThreshold(5000)
+        , SortingPeriod(3)
+        , sceneFile(APPEND_TO_LITERAL(PROJECT_SOURCE_DIR, "/scenes/cornell.json"))
     {}
 
     int TracedDepth;
     bool SortByMaterial;
     int SortingThreshold;
     int SortingPeriod;
+    std::string sceneFile;
 };
 
 namespace utilityCore
