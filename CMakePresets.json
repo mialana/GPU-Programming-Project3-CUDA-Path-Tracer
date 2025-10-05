@@ -11,7 +11,9 @@
             "generator": "Ninja Multi-Config",
             "binaryDir": "${sourceDir}/build",
             "cacheVariables": {
-                "CMAKE_CONFIGURATION_TYPES": "Debug;Release"
+                "CMAKE_CONFIGURATION_TYPES": "Debug;Release",
+                "ENABLE_USD": "ON",
+                "USD_ROOT": "/opt/usd"
             }
         }
     ],

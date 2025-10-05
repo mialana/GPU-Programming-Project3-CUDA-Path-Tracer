@@ -26,6 +26,9 @@
 #include <string>
 #include <signal.h>
 
+#include <pxr/usd/usd/stage.h>
+PXR_NAMESPACE_USING_DIRECTIVE
+
 static std::string startTimeString;
 
 // For camera controls
@@ -425,6 +428,16 @@ int main(int argc, char** argv)
 
     signal(SIGINT, exitHandler);           // exit gracefully when CTRL + C
 
+    std::string stageStr = std::string(PROJECT_SRC_DIR) + "/scenes/test.usda";
+    UsdStageRefPtr usdStage = UsdStage::Open(stageStr);
+    if (!usdStage)
+    {
+        std::cout << "Failed to open stage:" << stageStr << std::endl;
+    } else
+    {
+        std::cout << "opened!" << std::endl;
+    }
+
     startTimeString = currentTimeString();
 
     // Create Instance for ImGUIData
@@ -434,15 +447,15 @@ int main(int argc, char** argv)
 
     if (argc < 2)
     {
-        sceneFile = guiData->sceneFile; // use default scene if no arg given
+        sceneFile = guiData->sceneFile;  // use default scene if no arg given
     } else
     {
-        sceneFile = argv[1]; // override default scene
+        sceneFile = argv[1];  // override default scene
     }
 
     mainSetup(sceneFile);
-    
-    guiData->sceneFile = sceneFile; // set guiData
+
+    guiData->sceneFile = sceneFile;  // set guiData
 
     // Initialize CUDA and GL components
     init();

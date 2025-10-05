@@ -3,11 +3,13 @@ project(cuda_path_tracer LANGUAGES CUDA CXX)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
+set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/usd" "${CMAKE_SOURCE_DIR}/cmake/usd/packages" ${CMAKE_MODULE_PATH})
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Enable C++17 for host code
 set(CMAKE_CXX_STANDARD 17)
@@ -22,6 +24,16 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 find_package(OpenGL REQUIRED)
+
+# USD Config
+# set(USD_ROOT /opt/usd)
+# set(BOOST_ROOT /usr)
+# set(TBB_ROOT /usr)
+
+# include(Options)
+# include(Defaults)
+# include(Packages)
+# include(Utils)
 
 if(UNIX)
     include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
@@ -108,10 +120,7 @@ source_group("ImGui\\Sources" FILES ${imgui_sources})
 add_subdirectory(stream_compaction)  # TODO: uncomment if using your stream compaction
 
 add_executable(${CMAKE_PROJECT_NAME} ${sources} ${headers} ${imgui_sources} ${imgui_headers})
-target_link_libraries(${CMAKE_PROJECT_NAME}
-    ${GL_LIBRARIES}
-    stream_compaction  # TODO: uncomment if using your stream compaction
-)
+
 set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES CUDA_ARCHITECTURES native)
 
@@ -120,5 +129,19 @@ target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE "$<$<AND:$<CONFIG:Release>,
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${CMAKE_PROJECT_NAME})
 
-target_compile_definitions(${CMAKE_PROJECT_NAME} PUBLIC "PROJECT_SOURCE_DIR=${CMAKE_SOURCE_DIR}")
+# add a definition to access in source code
+target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE PROJECT_SRC_DIR=\"${CMAKE_SOURCE_DIR}\")
+
+# USD Config
+
+option(ENABLE_USD "Enable USD as scene file format" OFF)
+
+if (ENABLE_USD)
+    include(import_usd)
+else()
+    target_link_libraries(${CMAKE_PROJECT_NAME}
+        ${GL_LIBRARIES}
+        stream_compaction
+    )
+endif()
 

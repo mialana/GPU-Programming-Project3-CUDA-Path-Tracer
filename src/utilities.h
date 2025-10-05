@@ -16,10 +16,6 @@
 #define EPSILON 0.00001f
 #define INV_PI 0.31830988618379067154f
 
-#define VALUE(string) #string
-#define TO_LITERAL(string) VALUE(string)
-#define APPEND_TO_LITERAL(string, suffix) VALUE(string) suffix
-
 class GuiDataContainer
 {
 public:
@@ -28,7 +24,7 @@ public:
         , SortByMaterial(true)
         , SortingThreshold(5000)
         , SortingPeriod(3)
-        , sceneFile(APPEND_TO_LITERAL(PROJECT_SOURCE_DIR, "/scenes/cornell.json"))
+        , sceneFile(std::string(PROJECT_SRC_DIR) + "/scenes/cornell.json")
     {}
 
     int TracedDepth;
