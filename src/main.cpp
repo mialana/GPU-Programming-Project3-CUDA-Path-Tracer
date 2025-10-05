@@ -147,7 +147,8 @@ void deletePBO(GLuint* pbo)
     if (pbo)
     {
         // unregister this buffer object with CUDA
-        if (cuda_pbo_resource) {
+        if (cuda_pbo_resource)
+        {
             cudaGraphicsUnregisterResource(cuda_pbo_resource);
             cuda_pbo_resource = nullptr;
         }
@@ -335,7 +336,7 @@ void mainLoop()
         glfwSwapBuffers(window);
     }
     cleanupCuda();
-    
+
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
@@ -350,8 +351,8 @@ void mainLoop()
 
 int main(int argc, char** argv)
 {
-    setenv("WAYLAND_DISPLAY", "", 1); // for linux wayland runtime
-    setenv("XDG_SESSION_TYPE", "x11", 1); // for linux wayland runtime
+    setenv("WAYLAND_DISPLAY", "", 1);      // for linux wayland runtime
+    setenv("XDG_SESSION_TYPE", "x11", 1);  // for linux wayland runtime
 
     startTimeString = currentTimeString();
 

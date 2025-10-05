@@ -87,7 +87,7 @@ void StreamCompaction::Radix::sort(int n,
         // Split data into 0s and 1s based on the target bit
         _split<<<blocks, blockSize>>>(n, dev_dataA, dev_dataB, tgtBit);
 
-        // Perform scan on the split results. use same array as we need 
+        // Perform scan on the split results. use same array as we need
         Shared::scan(n, dev_dataB, dev_dataB, dev_blockSums, blockSize);
 
         // Scatter data based on the split results

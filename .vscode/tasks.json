@@ -5,7 +5,7 @@
             "label": "CUDA Make Debug Build",
             "type": "shell",
             "command": "make",
-            "args": ["build", "MODE=Debug"],
+            "args": ["format", "build", "MODE=Debug"],
             "group": {
                 "kind": "build",
                 "isDefault": true

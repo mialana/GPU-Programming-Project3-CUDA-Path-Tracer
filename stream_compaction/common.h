@@ -46,8 +46,25 @@ namespace Common
 {
 __global__ void kernMapToBoolean(int n, int* bools, const int* idata);
 
-__global__ void kernScatter(
-    int n, int* odata, const int* idata, const int* bools, const int* indices);
+/**
+ * Performs scatter on an array. That is, for each element in idata,
+ * if bools[idx] == 1, it copies idata[idx] to odata[indices[idx]].
+ */
+template<typename T>
+__global__ void kernScatter(int n, T* odata, const T* idata, const int* bools, const int* indices)
+{
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (index >= n)
+    {
+        return;
+    }
+
+    if (bools[index] == 1)
+    {
+        odata[indices[index]] = idata[index];
+    }
+}
 
 __global__ void kernel_inclusiveToExclusive(int n, int identity, const int* iData, int* oData);
 

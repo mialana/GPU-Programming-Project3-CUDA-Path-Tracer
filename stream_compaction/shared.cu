@@ -123,7 +123,6 @@ __global__ void kernel_addBlockSums(int n, int* dev_data, const int* dev_blockSu
 
 /*
     the inner operation of scan without timers and allocation.
-    note: dev_scan should be pre-allocated to the padded power of two size
 */
 void StreamCompaction::Shared::scan(
     int n, const int* dev_idata, int* dev_odata, int* dev_blockSums, const int blockSize)
@@ -208,3 +207,129 @@ void StreamCompaction::Shared::scanWrapper(int n, int* odata, const int* idata)
 }
 
 /************************************************************************************************ */
+
+int StreamCompaction::Shared::compact(int n,
+                                      const int* dev_idata,
+                                      int* dev_odata,
+                                      int* dev_bools,
+                                      int* dev_indices,
+                                      int* dev_blockSums,
+                                      int blockSize)
+{
+    int blocks = divup(n, blockSize);
+
+    Common::kernMapToBoolean<<<blocks, blockSize>>>(n, dev_bools, dev_idata);
+
+    StreamCompaction::Shared::scan(n, dev_bools, dev_indices, dev_blockSums, blockSize);
+
+    Common::kernScatter<int>
+        <<<blocks, blockSize>>>(n, dev_odata, dev_idata, dev_bools, dev_indices);
+
+    int lastIndex;
+    int lastBool;
+
+    cudaMemcpy(&lastIndex, &dev_indices[n - 1], sizeof(int), cudaMemcpyDeviceToHost);
+    cudaMemcpy(&lastBool, &dev_bools[n - 1], sizeof(int), cudaMemcpyDeviceToHost);
+
+    return lastIndex + lastBool;
+}
+
+// compact with pre-processed bools
+int StreamCompaction::Shared::compactWithBools(int n,
+                                               const int* dev_idata,
+                                               int* dev_odata,
+                                               const int* dev_bools,
+                                               int* dev_indices,
+                                               int* dev_blockSums,
+                                               int blockSize)
+{
+    int blocks = divup(n, blockSize);
+
+    StreamCompaction::Shared::scan(n, dev_bools, dev_indices, dev_blockSums, blockSize);
+
+    Common::kernScatter<int>
+        <<<blocks, blockSize>>>(n, dev_odata, dev_idata, dev_bools, dev_indices);
+
+    int lastIndex;
+    int lastBool;
+
+    cudaMemcpy(&lastIndex, &dev_indices[n - 1], sizeof(int), cudaMemcpyDeviceToHost);
+    cudaMemcpy(&lastBool, &dev_bools[n - 1], sizeof(int), cudaMemcpyDeviceToHost);
+
+    return lastIndex + lastBool;
+}
+
+/**
+ * Performs stream compaction on idata, storing the result into odata.
+ * Returns the number of surviving elements (i.e. non-zero).
+ */
+int StreamCompaction::Shared::compactWrapper(int n, int* odata, const int* idata)
+{
+    unsigned long long paddedN = 1 << ilog2ceil(n);    // pad to nearest power of 2
+    int totalBlocks = divup(paddedN, 2 * BLOCK_SIZE);  // for scan block sums
+
+    // Allocate device arrays
+    int* dev_idata;
+    int* dev_odata;
+    int* dev_bools;
+    int* dev_indices;
+    int* dev_blockSums;
+
+    cudaMalloc((void**)&dev_idata, sizeof(int) * paddedN);
+    checkCUDAError("CUDA malloc for dev_idata in compactWrapper failed.");
+
+    cudaMalloc((void**)&dev_odata, sizeof(int) * paddedN);
+    checkCUDAError("CUDA malloc for dev_odata in compactWrapper failed.");
+
+    cudaMalloc((void**)&dev_bools, sizeof(int) * n);
+    checkCUDAError("CUDA malloc for dev_bools in compactWrapper failed.");
+
+    cudaMalloc((void**)&dev_indices, sizeof(int) * n);
+    checkCUDAError("CUDA malloc for dev_indices in compactWrapper failed.");
+
+    cudaMalloc((void**)&dev_blockSums, sizeof(int) * totalBlocks);
+    checkCUDAError("CUDA malloc for dev_blockSums in compactWrapper failed.");
+
+    // Copy input data from host to device
+    cudaMemcpy(dev_idata, idata, sizeof(int) * n, cudaMemcpyHostToDevice);
+    checkCUDAError("CUDA memcpy for idata to dev_idata in compactWrapper failed.");
+
+    // Run the compaction and time it
+    bool usingTimer = false;
+    if (!timer().gpu_timer_started)
+    {
+        timer().startGpuTimer();
+        usingTimer = true;
+    }
+
+    int compactCount
+        = compact(n, dev_idata, dev_odata, dev_bools, dev_indices, dev_blockSums, BLOCK_SIZE);
+
+    if (usingTimer)
+    {
+        timer().endGpuTimer();
+    }
+
+    // Copy the compacted result back to host; note that compactCount elements are valid
+    cudaMemcpy(odata, dev_odata, sizeof(int) * compactCount, cudaMemcpyDeviceToHost);
+    checkCUDAError("CUDA memcpy for dev_odata to host in compactWrapper failed.");
+
+    // Free device memory
+    cudaFree(dev_idata);
+    cudaFree(dev_odata);
+    cudaFree(dev_bools);
+    cudaFree(dev_indices);
+    cudaFree(dev_blockSums);
+
+    return compactCount;
+}
+
+// template int StreamCompaction::Shared::compactByKey<float>(int n,
+//                                                            const float* dev_ivalues,
+//                                                            float* dev_ovalues,
+//                                                            const int* dev_idata,
+//                                                            int* dev_odata,
+//                                                            int* dev_bools,
+//                                                            int* dev_indices,
+//                                                            int* dev_blockSums,
+//                                                            int blockSize);

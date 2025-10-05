@@ -21,14 +21,6 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     SET_PROPERTY(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
 endif()
 
-include(cmake/CPM.cmake)
-
-CPMAddPackage(
-    NAME CCCL
-    GITHUB_REPOSITORY nvidia/cccl
-    GIT_TAG main # Fetches the latest commit on the main branch
-)
-
 find_package(OpenGL REQUIRED)
 
 if(UNIX)
@@ -37,6 +29,7 @@ if(UNIX)
     find_package(GLEW REQUIRED)
     set(GL_LIBRARIES glfw ${GLEW_LIBRARIES} ${OPENGL_LIBRARIES})
 else(UNIX)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-stringop-overflow")
     set(EXTERNAL "${CMAKE_SOURCE_DIR}/external")
 
     set(GLFW_ROOT_DIR ${EXTERNAL})
@@ -118,7 +111,6 @@ add_executable(${CMAKE_PROJECT_NAME} ${sources} ${headers} ${imgui_sources} ${im
 target_link_libraries(${CMAKE_PROJECT_NAME}
     ${GL_LIBRARIES}
     stream_compaction  # TODO: uncomment if using your stream compaction
-    CCCL::CCCL
 )
 set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES CUDA_ARCHITECTURES native)
