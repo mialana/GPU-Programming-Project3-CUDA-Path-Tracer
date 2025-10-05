@@ -4,6 +4,7 @@
 
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/string_cast.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include "json.hpp"
 
 #include <fstream>
@@ -32,8 +33,7 @@ Scene::Scene(string filename)
     {
         loadFromJSON(filename);
         return;
-    }
-    else if (ext.substr(0, 4) == ".usd" && enableUSD)
+    } else if (ext.substr(0, 4) == ".usd" && enableUSD)
     {
         loadFromUSD(filename);
         return;
@@ -137,6 +137,105 @@ void Scene::loadFromJSON(const std::string& jsonName)
     std::fill(state.image.begin(), state.image.end(), glm::vec3());
 }
 
+void Scene::createDefaultCamera()
+{
+    Camera& camera = this->state.camera;
+    camera.resolution = glm::ivec2(800, 800);
+    camera.invResolution = glm::vec2(1.0f / 800.0f, 1.0f / 800.0f);
+
+    float fovy = 45.0f;
+    state.iterations = 5000;
+    state.traceDepth = 8;
+    state.imageName = "VOID";
+
+    // --- Camera orientation ---
+    camera.position = glm::vec3(0.0f, 5.0f, 10.5f);
+    camera.lookAt = glm::vec3(0.0f, 5.0f, 0.0f);
+    camera.up = glm::vec3(0.0f, 1.0f, 0.0f);
+
+    // --- Derived quantities ---
+    float yscaled = tan(glm::radians(fovy));
+    float xscaled = yscaled * static_cast<float>(camera.resolution.x) / camera.resolution.y;
+    float fovx = glm::degrees(atan(xscaled));
+    camera.fov = glm::vec2(fovx, fovy);
+
+    camera.view = glm::normalize(camera.lookAt - camera.position);
+    camera.right = glm::normalize(glm::cross(camera.view, camera.up));
+    camera.pixelLength = glm::vec2(2.0f * xscaled / static_cast<float>(camera.resolution.x),
+                                   2.0f * yscaled / static_cast<float>(camera.resolution.y));
+
+    // --- Allocate image buffer ---
+    int arraylen = camera.resolution.x * camera.resolution.y;
+    state.image.resize(arraylen);
+    std::fill(state.image.begin(), state.image.end(), glm::vec3(0.0f));
+}
+
+Geom buildGeomFromUsdMesh(UsdGeomMesh mesh, GfMatrix4d worldXform)
+{
+    // Convert to glm::mat4 (column-major)
+    glm::mat4 transform = glm::make_mat4(worldXform.GetArray());
+
+    Geom g;
+    g.type = MESH;
+    g.transform = transform;
+    g.inverseTransform = glm::inverse(transform);
+    g.invTranspose = glm::inverseTranspose(transform);
+    g.materialid = 0;
+
+    // points
+    VtArray<GfVec3f> points;
+    mesh.GetPointsAttr().Get(&points);
+
+    // face count
+    VtArray<int> faceVertexCounts;
+    mesh.GetFaceVertexCountsAttr().Get(&faceVertexCounts);
+
+    // face indices
+    VtArray<int> faceVertexIndices;
+    mesh.GetFaceVertexIndicesAttr().Get(&faceVertexIndices);
+
+    std::string reason;
+    if (!UsdGeomMesh::ValidateTopology(faceVertexIndices, faceVertexCounts, points.size(), &reason))
+    {
+        std::cout << "Imported Mesh has invalid topology: " << reason << std::endl;
+        raise(SIGINT);
+    }
+
+    int numPoints = points.size();
+    int numTris = faceVertexCounts.size();
+    int numIndices = faceVertexIndices.size();
+
+    if (numIndices % 3 != 0 || numIndices / numTris != 3)
+    {
+        std::cout << "Input mesh is not properly triangulated." << std::endl;
+        raise(SIGINT);
+    }
+
+    // start filling arrays
+    g.mesh.vertices = new glm::vec3[numPoints];
+    g.mesh.triVerts = new glm::ivec3[numTris];
+
+    for (int i = 0; i < numPoints; i++)
+    {
+        // convert each GfVec3f from USD to glm::vec3.
+        g.mesh.vertices[i] = glm::vec3(points[i][0], points[i][1], points[i][2]);
+    }
+
+    int i = 0;
+    for (int triIdx = 0; triIdx < numTris; triIdx++)
+    {
+        g.mesh.triVerts[triIdx] = glm::ivec3(faceVertexIndices[i],
+                                             faceVertexIndices[i + 1],
+                                             faceVertexIndices[i + 2]);
+        i += 3;
+    }
+
+    g.mesh.vertexCount = numPoints;
+    g.mesh.triVertCount = numTris;
+
+    return g;
+}
+
 void Scene::loadFromUSD(const std::string& usdName)
 {
     UsdStageRefPtr usdStage = UsdStage::Open(usdName);
@@ -144,8 +243,43 @@ void Scene::loadFromUSD(const std::string& usdName)
     {
         std::cout << "Failed to open stage:" << usdName << std::endl;
         raise(SIGINT);  // exit now
-    } 
+    }
 
-    
+    UsdGeomXformCache xformCache;
 
+    for (const UsdPrim& prim : usdStage->Traverse())
+    {
+        // Check if the prim is a UsdGeomMesh
+        if (prim.IsA<UsdGeomMesh>())
+        {
+            UsdGeomMesh mesh(prim);
+
+            std::cout << "Found Mesh: " << mesh.GetPath() << std::endl;
+
+            // transform
+            GfMatrix4d worldXform;
+            worldXform = xformCache.GetLocalToWorldTransform(prim);
+
+            Geom baseGeom = buildGeomFromUsdMesh(mesh, worldXform);
+
+            std::cout << "Built geom from USD mesh:" << std::endl;
+            std::cout << "   Name: " << mesh.GetPath() << std::endl;
+            std::cout << "   Vertices: " << baseGeom.mesh.vertexCount << std::endl;
+            std::cout << "   Triangles: " << baseGeom.mesh.triVertCount << std::endl;
+
+            geoms.push_back(baseGeom);
+        }
+    }
+
+    Material diffuseWhite{};
+    diffuseWhite.color = glm::vec3(0.98f, 0.98f, 0.98f);
+    diffuseWhite.emittance = 0.0f;
+    diffuseWhite.hasReflective = 0.0f;
+    diffuseWhite.hasRefractive = 0.0f;
+    diffuseWhite.specular.exponent = 0.0f;
+    diffuseWhite.specular.color = glm::vec3(0.0f);
+
+    materials.emplace_back(diffuseWhite);
+
+    this->createDefaultCamera();
 }

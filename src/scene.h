@@ -9,6 +9,8 @@ private:
     void loadFromJSON(const std::string& jsonName);
     void loadFromUSD(const std::string& usdName);
 
+    void createDefaultCamera();
+
 public:
     Scene(std::string filename);
 
