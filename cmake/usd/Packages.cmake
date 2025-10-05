@@ -25,7 +25,7 @@ if (ENABLE_PYTHON_SUPPORT)
     )
 
     # Pick up boost version variables.
-    find_package(Boost REQUIRED)
+    find_package(Boost CONFIG REQUIRED)
 
     # We can use Boost_VERSION_STRING in CMake 3.14+.
     set(boost_version_string "${Boost_MAJOR_VERSION}.${Boost_MINOR_VERSION}.${Boost_SUBMINOR_VERSION}")
@@ -38,7 +38,7 @@ if (ENABLE_PYTHON_SUPPORT)
         endif()
     endif()
 
-    find_package(Boost
+    find_package(Boost CONFIG
             REQUIRED
     )
 endif()

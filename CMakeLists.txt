@@ -70,6 +70,7 @@ set(headers
     src/scene.h
     src/sceneStructs.h
     src/utilities.h
+    src/usdUtility.h
 )
 
 set(sources
@@ -134,7 +135,7 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE PROJECT_SRC_DIR=\"${CMA
 
 # USD Config
 
-option(ENABLE_USD "Enable USD as scene file format" OFF)
+option(ENABLE_USD "Enable USD as scene file format" ON)
 
 if (ENABLE_USD)
     include(import_usd)

@@ -11,17 +11,31 @@
 #include <string>
 #include <unordered_map>
 
+#include <csignal>
+
+#include "usdUtility.h"
+
 using namespace std;
 using json = nlohmann::json;
 
 Scene::Scene(string filename)
 {
+    bool enableUSD = false;
+#ifdef ENABLE_USD
+    enableUSD = true;
+#endif
+
     cout << "Reading scene from " << filename << " ..." << endl;
     cout << " " << endl;
     auto ext = filename.substr(filename.find_last_of('.'));
     if (ext == ".json")
     {
         loadFromJSON(filename);
+        return;
+    }
+    else if (ext.substr(0, 4) == ".usd" && enableUSD)
+    {
+        loadFromUSD(filename);
         return;
     } else
     {
@@ -121,4 +135,17 @@ void Scene::loadFromJSON(const std::string& jsonName)
     int arraylen = camera.resolution.x * camera.resolution.y;
     state.image.resize(arraylen);
     std::fill(state.image.begin(), state.image.end(), glm::vec3());
+}
+
+void Scene::loadFromUSD(const std::string& usdName)
+{
+    UsdStageRefPtr usdStage = UsdStage::Open(usdName);
+    if (!usdStage)
+    {
+        std::cout << "Failed to open stage:" << usdName << std::endl;
+        raise(SIGINT);  // exit now
+    } 
+
+    
+
 }

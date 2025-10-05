@@ -12,6 +12,7 @@
             "binaryDir": "${sourceDir}/build",
             "cacheVariables": {
                 "CMAKE_CONFIGURATION_TYPES": "Debug;Release",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
                 "ENABLE_USD": "ON",
                 "USD_ROOT": "/opt/usd"
             }

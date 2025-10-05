@@ -25,6 +25,7 @@ public:
         , SortingThreshold(5000)
         , SortingPeriod(3)
         , sceneFile(std::string(PROJECT_SRC_DIR) + "/scenes/cornell.json")
+        , enableUSD(false)
     {}
 
     int TracedDepth;
@@ -32,6 +33,8 @@ public:
     int SortingThreshold;
     int SortingPeriod;
     std::string sceneFile;
+
+    bool enableUSD;  // put here so easily accessible
 };
 
 namespace utilityCore

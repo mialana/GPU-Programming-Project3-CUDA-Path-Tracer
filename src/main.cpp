@@ -26,9 +26,6 @@
 #include <string>
 #include <signal.h>
 
-#include <pxr/usd/usd/stage.h>
-PXR_NAMESPACE_USING_DIRECTIVE
-
 static std::string startTimeString;
 
 // For camera controls
@@ -268,7 +265,7 @@ bool init()
     ImGui_ImplOpenGL3_Init("#version 120");
 
     fileDialog.SetTitle("Scene File Picker");
-    fileDialog.SetTypeFilters({".json"});
+    fileDialog.SetTypeFilters({".json", ".usd", ".usda", ".usdc", ".usdz"});
 
     // Initialize other stuff
     initVAO();
@@ -428,16 +425,6 @@ int main(int argc, char** argv)
 
     signal(SIGINT, exitHandler);           // exit gracefully when CTRL + C
 
-    std::string stageStr = std::string(PROJECT_SRC_DIR) + "/scenes/test.usda";
-    UsdStageRefPtr usdStage = UsdStage::Open(stageStr);
-    if (!usdStage)
-    {
-        std::cout << "Failed to open stage:" << stageStr << std::endl;
-    } else
-    {
-        std::cout << "opened!" << std::endl;
-    }
-
     startTimeString = currentTimeString();
 
     // Create Instance for ImGUIData
@@ -455,7 +442,11 @@ int main(int argc, char** argv)
 
     mainSetup(sceneFile);
 
+    // additional guiData processing
     guiData->sceneFile = sceneFile;  // set guiData
+#ifdef ENABLE_USD
+    guiData->enableUSD = true;
+#endif
 
     // Initialize CUDA and GL components
     init();
