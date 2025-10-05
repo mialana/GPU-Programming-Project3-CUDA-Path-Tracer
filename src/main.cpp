@@ -25,9 +25,6 @@
 #include <string>
 #include <signal.h>
 
-#define WAYLAND_DISPLAY ''
-#define XDG_SESSION_TYPE x11
-
 static std::string startTimeString;
 
 // For camera controls
@@ -236,7 +233,7 @@ bool init()
         exit(EXIT_FAILURE);
     }
 
-    window = glfwCreateWindow(width, height, "CIS 565 Path Tracer", NULL, NULL);
+    window = glfwCreateWindow(width, height, "CUDA Path Tracer", NULL, NULL);
     if (!window)
     {
         glfwTerminate();
@@ -291,13 +288,27 @@ void RenderImGui()
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
+    ImGui::SetNextWindowSize(ImVec2(400, 150), ImGuiCond_Appearing);
+
     ImGui::Begin(
         "Path Tracer Analytics");  // Create a window called "Hello, world!" and append into it.
     ImGui::Text("Traced Depth %d", imguiData->TracedDepth);
     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
                 1000.0f / ImGui::GetIO().Framerate,
                 ImGui::GetIO().Framerate);
-    ImGui::Checkbox("Sort by Material", &imguiData->SortByMaterial);
+    ImGui::Separator();
+    if (ImGui::Checkbox("Sort by Material", &imguiData->SortByMaterial))
+    {
+        camchanged = true;
+    }
+    if (imguiData->SortByMaterial)
+    {
+        ImGui::SliderInt("Sorting Period", &imguiData->SortingPeriod, 0, 5);
+        ImGui::SliderInt("Sorting Threshold", &imguiData->SortingThreshold, 0, 640000);
+    }
+
+    ImGui::Separator();
+
     ImGui::End();
 
     ImGui::Render();

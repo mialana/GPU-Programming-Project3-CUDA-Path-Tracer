@@ -19,10 +19,14 @@
 class GuiDataContainer
 {
 public:
-    GuiDataContainer() : TracedDepth(0), SortByMaterial(true) {}
+    GuiDataContainer()
+        : TracedDepth(0), SortByMaterial(true), SortingThreshold(5000), SortingPeriod(3)
+    {}
 
     int TracedDepth;
     bool SortByMaterial;
+    int SortingThreshold;
+    int SortingPeriod;
 };
 
 namespace utilityCore
