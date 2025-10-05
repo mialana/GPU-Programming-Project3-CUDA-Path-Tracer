@@ -23,6 +23,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <signal.h>
 
 #define WAYLAND_DISPLAY ''
 #define XDG_SESSION_TYPE x11
@@ -48,6 +49,7 @@ Scene* scene;
 GuiDataContainer* guiData;
 RenderState* renderState;
 int iteration;
+bool isInitial;
 
 int width;
 int height;
@@ -177,6 +179,25 @@ void cleanupCuda()
     }
 }
 
+void exitHandler(int sig)
+{
+    printf("\nCaught signal %d\n", sig);
+
+    pathtraceFree();
+    cudaDeviceReset();
+
+    cleanupCuda();
+
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+
+    glfwDestroyWindow(window);
+    glfwTerminate();
+
+    exit(0);
+}
+
 void initCuda()
 {
     cudaSetDevice(0);
@@ -239,7 +260,7 @@ bool init()
     ImGui::CreateContext();
     io = &ImGui::GetIO();
     (void)io;
-    ImGui::StyleColorsLight();
+    ImGui::StyleColorsDark();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 120");
 
@@ -270,33 +291,13 @@ void RenderImGui()
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    bool show_demo_window = true;
-    bool show_another_window = false;
-    ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
-    static float f = 0.0f;
-    static int counter = 0;
-
     ImGui::Begin(
         "Path Tracer Analytics");  // Create a window called "Hello, world!" and append into it.
-
-    // LOOK: Un-Comment to check the output window and usage
-    // ImGui::Text("This is some useful text.");               // Display some text (you can use a
-    // format strings too) ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools
-    // storing our window open/close state ImGui::Checkbox("Another Window", &show_another_window);
-
-    // ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from
-    // 0.0f to 1.0f ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats
-    // representing a color
-
-    // if (ImGui::Button("Button"))                            // Buttons return true when clicked
-    // (most widgets return true when edited/activated)
-    //     counter++;
-    // ImGui::SameLine();
-    // ImGui::Text("counter = %d", counter);
     ImGui::Text("Traced Depth %d", imguiData->TracedDepth);
     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
                 1000.0f / ImGui::GetIO().Framerate,
                 ImGui::GetIO().Framerate);
+    ImGui::Checkbox("Sort by Material", &imguiData->SortByMaterial);
     ImGui::End();
 
     ImGui::Render();
@@ -316,7 +317,7 @@ void mainLoop()
 
         runCuda();
 
-        std::string title = "CIS565 Path Tracer | " + utilityCore::convertIntToString(iteration)
+        std::string title = "CUDA Path Tracer | " + utilityCore::convertIntToString(iteration)
                             + " Iterations";
         glfwSetWindowTitle(window, title.c_str());
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
@@ -354,6 +355,8 @@ int main(int argc, char** argv)
     setenv("WAYLAND_DISPLAY", "", 1);      // for linux wayland runtime
     setenv("XDG_SESSION_TYPE", "x11", 1);  // for linux wayland runtime
 
+    signal(SIGINT, exitHandler);           // exit gracefully when CTRL + C
+
     startTimeString = currentTimeString();
 
     if (argc < 2)
@@ -372,6 +375,7 @@ int main(int argc, char** argv)
 
     // Set up camera stuff from loaded path tracer settings
     iteration = 0;
+    isInitial = true;
     renderState = &scene->state;
     Camera& cam = renderState->camera;
     width = cam.resolution.x;
@@ -452,7 +456,6 @@ void runCuda()
         cam.position = cameraPosition;
         cameraPosition += cam.lookAt;
         cam.position = cameraPosition;
-        camchanged = false;
     }
 
     // Map OpenGL buffer object for writing from CUDA on a single GPU
@@ -460,8 +463,17 @@ void runCuda()
 
     if (iteration == 0)
     {
-        pathtraceFree();
-        pathtraceInit(scene);
+        if (isInitial)
+        {
+            pathtraceFree();
+            pathtraceInit(scene);
+            isInitial = false;
+        } else
+        {
+            Camera& cam = renderState->camera;
+            pathtraceResetImage(cam.resolution.x * cam.resolution.y);
+            camchanged = false;
+        }
     }
 
     if (iteration < renderState->iterations)
