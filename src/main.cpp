@@ -326,12 +326,13 @@ void RenderImGui()
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    ImGui::SetNextWindowSize(ImVec2(400, 200), ImGuiCond_Appearing);
+    ImGui::SetNextWindowSize(ImVec2(400, 180), ImGuiCond_Appearing);
 
     ImGui::Begin(
         "Path Tracer Analytics");  // Create a window called "Hello, world!" and append into it.
 
     ImGui::Text(guiData->sceneFile.c_str());
+    ImGui::SameLine(0, 10.f);
     if (ImGui::Button("Select File"))
     {
         fileDialog.Open();
@@ -354,6 +355,30 @@ void RenderImGui()
     }
 
     ImGui::Separator();
+
+    // scene view combo box selector
+    const char* comboOptions[] = {"Base", "Normals"};
+
+    const char* selected = comboOptions[imguiData->activeView];
+
+    ImGui::SetNextItemWidth(150.f);
+    if (ImGui::BeginCombo("##activeViewCombo", selected))
+    {
+        for (int i = 0; i < IM_ARRAYSIZE(comboOptions); i++)
+        {
+            const bool isSelected = (imguiData->activeView == i);
+            if (ImGui::Selectable(comboOptions[i], isSelected))
+            {
+                imguiData->activeView = i;
+                camchanged = true;
+            }
+            if (isSelected)
+            {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndCombo();
+    }
 
     ImGui::End();
 

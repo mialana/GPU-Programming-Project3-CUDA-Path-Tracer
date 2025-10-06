@@ -463,6 +463,25 @@ __global__ void partitionMaterialIDs(int n,
     }
 }
 
+__global__ void kernelShowNormalsView(int n,
+                                      ShadeableIntersection* intersections,
+                                      PathSegment* pathSegments,
+                                      const int* pathIndices)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n)
+    {
+        return;
+    }
+
+    int pathIndex = pathIndices[i];
+    ShadeableIntersection hit = intersections[pathIndex];
+
+    pathSegments[pathIndex].color = glm::abs(hit.surfaceNormal);
+
+    pathSegments[pathIndex].remainingBounces = 0;
+}
+
 /**
  * Wrapper for the __global__ call that sets up the kernel calls and does a ton
  * of memory management
@@ -538,6 +557,18 @@ void pathtrace(uchar4* pbo, int frame, int iter)
         checkCUDAError("trace one bounce");
         cudaDeviceSynchronize();
         depth++;
+
+        if (guiData->activeView == 1)
+        {
+            kernelShowNormalsView<<<numblocksPathSegmentTracing, blockSize1d>>>(num_paths,
+                                                                                dev_intersections,
+                                                                                dev_paths,
+                                                                                dev_pathIndicesA);
+
+            iterationComplete = true;
+            guiData->TracedDepth = depth;
+            break;
+        }
 
         // TODO:
         // --- Shading Stage ---

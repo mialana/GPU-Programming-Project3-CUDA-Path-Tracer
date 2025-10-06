@@ -19,11 +19,12 @@ struct Ray
 
 struct Mesh
 {
-    glm::vec3* vertices;
-    glm::ivec3* triVerts;
+    glm::vec3* points;     // vertex positions
+    glm::vec3* normals;    // vertex normals
+    glm::ivec3* triVerts;  // stores vertex indices of each triangle
 
-    int vertexCount;
-    int triVertCount;
+    int vertexCount;       // number of vertices in mesh
+    int triCount;          // number of triangles in mesh
 };
 
 struct Geom
@@ -54,6 +55,8 @@ struct Material
     float hasRefractive;
     float indexOfRefraction;
     float emittance;
+
+    bool isReflective;  // simple bool for now
 };
 
 struct Camera

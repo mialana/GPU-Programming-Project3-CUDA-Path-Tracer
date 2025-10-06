@@ -26,6 +26,7 @@ public:
         , SortingPeriod(3)
         , sceneFile(std::string(PROJECT_SRC_DIR) + "/scenes/cornell.json")
         , enableUSD(false)
+        , activeView(0)
     {}
 
     int TracedDepth;
@@ -33,6 +34,8 @@ public:
     int SortingThreshold;
     int SortingPeriod;
     std::string sceneFile;
+
+    int activeView;  // 0 = base, 1 = normals
 
     bool enableUSD;  // put here so easily accessible
 };

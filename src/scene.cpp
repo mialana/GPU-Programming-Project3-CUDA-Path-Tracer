@@ -69,6 +69,7 @@ void Scene::loadFromJSON(const std::string& jsonName)
         {
             const auto& col = p["RGB"];
             newMaterial.color = glm::vec3(col[0], col[1], col[2]);
+            newMaterial.isReflective = true;
         }
         MatNameToID[name] = materials.size();
         materials.emplace_back(newMaterial);
@@ -186,6 +187,10 @@ Geom buildGeomFromUsdMesh(UsdGeomMesh mesh, GfMatrix4d worldXform)
     VtArray<GfVec3f> points;
     mesh.GetPointsAttr().Get(&points);
 
+    // normals
+    VtArray<GfVec3f> normals;
+    mesh.GetNormalsAttr().Get(&normals);
+
     // face count
     VtArray<int> faceVertexCounts;
     mesh.GetFaceVertexCountsAttr().Get(&faceVertexCounts);
@@ -202,6 +207,7 @@ Geom buildGeomFromUsdMesh(UsdGeomMesh mesh, GfMatrix4d worldXform)
     }
 
     int numPoints = points.size();
+    int numNormals = normals.size();
     int numTris = faceVertexCounts.size();
     int numIndices = faceVertexIndices.size();
 
@@ -209,16 +215,29 @@ Geom buildGeomFromUsdMesh(UsdGeomMesh mesh, GfMatrix4d worldXform)
     {
         std::cout << "Input mesh is not properly triangulated." << std::endl;
         raise(SIGINT);
+    } else if (numIndices != numNormals)
+    {
+        std::cout << "Input mush does not have proper normals." << std::endl;
+        std::cout << "Normals: " << numNormals << std::endl;
+        std::cout << "Points: " << numPoints << std::endl;
+        std::cout << "Tris: " << numTris << std::endl;
+        std::cout << "Indices: " << numIndices << std::endl;
+        raise(SIGINT);  // we don't allow mediocre mesh here
     }
 
     // start filling arrays
-    g.mesh.vertices = new glm::vec3[numPoints];
+    g.mesh.points = new glm::vec3[numPoints];
+    g.mesh.normals = new glm::vec3[numNormals];
     g.mesh.triVerts = new glm::ivec3[numTris];
 
     for (int i = 0; i < numPoints; i++)
     {
-        // convert each GfVec3f from USD to glm::vec3.
-        g.mesh.vertices[i] = glm::vec3(points[i][0], points[i][1], points[i][2]);
+        g.mesh.points[i] = glm::vec3(points[i][0], points[i][1], points[i][2]);
+    }
+
+    for (int i = 0; i < numNormals; i++)
+    {
+        g.mesh.normals[i] = glm::vec3(normals[i][0], normals[i][1], normals[i][2]);
     }
 
     int i = 0;
@@ -231,7 +250,7 @@ Geom buildGeomFromUsdMesh(UsdGeomMesh mesh, GfMatrix4d worldXform)
     }
 
     g.mesh.vertexCount = numPoints;
-    g.mesh.triVertCount = numTris;
+    g.mesh.triCount = numTris;
 
     return g;
 }
@@ -265,11 +284,11 @@ void Scene::loadFromUSD(const std::string& usdName)
             std::cout << "Built geom from USD mesh:" << std::endl;
             std::cout << "   Name: " << mesh.GetPath() << std::endl;
             std::cout << "   Vertices: " << baseGeom.mesh.vertexCount << std::endl;
-            std::cout << "   Triangles: " << baseGeom.mesh.triVertCount << std::endl;
+            std::cout << "   Triangles: " << baseGeom.mesh.triCount << std::endl;
 
             geoms.push_back(baseGeom);
         }
     }
 
-    Scene::loadFromJSON("scenes/base.json"); // import light and cornel box as scene base
+    Scene::loadFromJSON("scenes/base.json");  // import light and cornel box as scene base
 }

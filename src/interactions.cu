@@ -38,6 +38,28 @@ __host__ __device__ glm::vec3 calculateRandomDirectionInHemisphere(
            + sin(around) * over * perpendicularDirection2;
 }
 
+__host__ __device__ void calculateSpecularReflection(PathSegment& pathSegment,
+                                                     glm::vec3 intersect,
+                                                     glm::vec3 normal,
+                                                     const Material& m,
+                                                     thrust::default_random_engine& rng)
+{
+    float BIG_EPSILON = 0.01;  // because so big
+
+    bool entering = dot(normal, pathSegment.ray.direction) < 0;
+    if (entering)
+    {
+        pathSegment.ray.origin = intersect + BIG_EPSILON * normal;
+    } else
+    {
+        pathSegment.ray.origin = intersect + BIG_EPSILON * -normal;
+    }
+
+    pathSegment.ray.direction = pathSegment.ray.direction
+                                - 2 * glm::dot(pathSegment.ray.direction, normal) * normal;
+    pathSegment.color *= m.color;
+}
+
 __host__ __device__ void scatterRay(PathSegment& pathSegment,
                                     const glm::vec3 intersect,
                                     const glm::vec3 normal,
@@ -48,10 +70,16 @@ __host__ __device__ void scatterRay(PathSegment& pathSegment,
     // A basic implementation of pure-diffuse shading will just call the
     // calculateRandomDirectionInHemisphere defined above.
 
-    pathSegment.ray.direction = calculateRandomDirectionInHemisphere(normal, rng);
-    pathSegment.ray.origin = intersect;
+    if (m.isReflective)
+    {
+        calculateSpecularReflection(pathSegment, intersect, normal, m, rng);
+    } else
+    {
+        pathSegment.ray.direction = calculateRandomDirectionInHemisphere(normal, rng);
+        pathSegment.ray.origin = intersect;
 
-    pathSegment.color *= m.color;
+        pathSegment.color *= m.color;
+    }
 
     pathSegment.remainingBounces--;
 }

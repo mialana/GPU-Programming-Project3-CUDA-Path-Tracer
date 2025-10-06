@@ -95,10 +95,10 @@ __host__ __device__ float sphereIntersectionTest(
 
     intersectionPoint = multiplyMV(sphere.transform, glm::vec4(objspaceIntersection, 1.f));
     normal = glm::normalize(multiplyMV(sphere.invTranspose, glm::vec4(objspaceIntersection, 0.f)));
-    if (!outside)
-    {
-        normal = -normal;
-    }
+    // if (!outside)
+    // {
+    //     normal = -normal;
+    // }
 
     return glm::length(r.origin - intersectionPoint);
 }
@@ -115,13 +115,13 @@ __host__ __device__ float meshIntersectionTest(
     glm::vec3 tempIntersection;
 
     // iterate over all triangles in the mesh.
-    int triCount = m.mesh.triVertCount;
+    int triCount = m.mesh.triCount;
     for (int i = 0; i < triCount; i++)
     {
         glm::ivec3 tri = m.mesh.triVerts[i];
-        glm::vec3 v0 = m.mesh.vertices[tri.x];
-        glm::vec3 v1 = m.mesh.vertices[tri.y];
-        glm::vec3 v2 = m.mesh.vertices[tri.z];
+        glm::vec3 v0 = m.mesh.points[tri.x];
+        glm::vec3 v1 = m.mesh.points[tri.y];
+        glm::vec3 v2 = m.mesh.points[tri.z];
         float t;
         glm::vec3 baryCoord;
 
@@ -132,8 +132,15 @@ __host__ __device__ float meshIntersectionTest(
             {
                 t_best = t;
                 tempIntersection = q.origin + q.direction * t;
-                glm::vec3 faceNormal = glm::normalize(glm::cross(v1 - v0, v2 - v0));
-                normal = glm::normalize(multiplyMV(m.invTranspose, glm::vec4(faceNormal, 0.0f)));
+
+                float u = baryCoord.x;
+                float v = baryCoord.y;
+                float w = 1.0f - u - v;
+                glm::vec3 n0 = m.mesh.normals[tri.x];
+                glm::vec3 n1 = m.mesh.normals[tri.y];
+                glm::vec3 n2 = m.mesh.normals[tri.z];
+                glm::vec3 interpNormal = w * n0 + u * n1 + v * n2;
+                normal = glm::normalize(multiplyMV(m.invTranspose, glm::vec4(interpNormal, 0.0f)));
             }
         }
     }
