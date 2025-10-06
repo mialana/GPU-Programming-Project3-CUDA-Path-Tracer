@@ -1,0 +1,15 @@
+#usda 1.0
+(
+    defaultPrim = "dragon"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "dragon" (
+    prepend references = @include/Stanford_Dragon_PBR.usdz@
+)
+{
+    float3 xformOp:scale = (0.02, 0.02, 0.02)
+    double3 xformOp:translate = (0.0, 1.0, 0.0)
+    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+}

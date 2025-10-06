@@ -180,7 +180,7 @@ Geom buildGeomFromUsdMesh(UsdGeomMesh mesh, GfMatrix4d worldXform)
     g.transform = transform;
     g.inverseTransform = glm::inverse(transform);
     g.invTranspose = glm::inverseTranspose(transform);
-    g.materialid = 0;
+    g.materialid = 4;
 
     // points
     VtArray<GfVec3f> points;
@@ -271,15 +271,5 @@ void Scene::loadFromUSD(const std::string& usdName)
         }
     }
 
-    Material diffuseWhite{};
-    diffuseWhite.color = glm::vec3(0.98f, 0.98f, 0.98f);
-    diffuseWhite.emittance = 0.0f;
-    diffuseWhite.hasReflective = 0.0f;
-    diffuseWhite.hasRefractive = 0.0f;
-    diffuseWhite.specular.exponent = 0.0f;
-    diffuseWhite.specular.color = glm::vec3(0.0f);
-
-    materials.emplace_back(diffuseWhite);
-
-    this->createDefaultCamera();
+    Scene::loadFromJSON("scenes/base.json"); // import light and cornel box as scene base
 }
