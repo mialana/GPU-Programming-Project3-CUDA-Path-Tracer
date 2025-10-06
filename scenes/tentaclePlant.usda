@@ -18,8 +18,8 @@ def Xform "root" (
     {
         custom string userProperties:blender:object_name = "tentaclePlant"
         float3 xformOp:rotateXYZ = (-89.99999, -0, 0)
-        float3 xformOp:scale = (0.16456747, 0.16456747, 0.16456747)
-        double3 xformOp:translate = (0, -0.5, 0)
+        float3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0, 0, 0)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
 
         def Mesh "Circle" (

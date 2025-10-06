@@ -171,6 +171,67 @@ void Scene::createDefaultCamera()
     std::fill(state.image.begin(), state.image.end(), glm::vec3(0.0f));
 }
 
+void processNormals(int numPoints,
+                    int numNormals,
+                    int numTris,
+                    VtArray<GfVec3f> normals,
+                    VtArray<int> faceVertexIndices,
+                    Geom& g)
+{
+    if (numNormals == numPoints)
+    {
+        for (int i = 0; i < numNormals; i++)
+        {
+            g.mesh.normals[i] = glm::vec3(normals[i][0], normals[i][1], normals[i][2]);
+        }
+    } else
+    {
+        // create temporary storage to accumulate normals and counts per vertex.
+        std::vector<glm::vec3> vertexNormals(numPoints, glm::vec3(0.0f));
+        std::vector<int> counts(numPoints, 0);
+
+        // 'i' is used to index into faceVertexIndices and normals (both are face-varying).
+        int i = 0;
+        for (int triIdx = 0; triIdx < numTris; triIdx++)
+        {
+            // get the three vertex indices for this triangle.
+            int idx0 = faceVertexIndices[i];
+            int idx1 = faceVertexIndices[i + 1];
+            int idx2 = faceVertexIndices[i + 2];
+
+            // read the face–varying normals.
+            glm::vec3 n0(normals[i][0], normals[i][1], normals[i][2]);
+            glm::vec3 n1(normals[i + 1][0], normals[i + 1][1], normals[i + 1][2]);
+            glm::vec3 n2(normals[i + 2][0], normals[i + 2][1], normals[i + 2][2]);
+
+            // accumulate normals into the appropriate vertex.
+            vertexNormals[idx0] += n0;
+            vertexNormals[idx1] += n1;
+            vertexNormals[idx2] += n2;
+            counts[idx0]++;
+            counts[idx1]++;
+            counts[idx2]++;
+
+            i += 3;
+        }
+
+        // average and normalize the accumulated normals.
+        for (int i = 0; i < numPoints; i++)
+        {
+            if (counts[i] > 0)
+            {
+                vertexNormals[i] = glm::normalize(vertexNormals[i] / static_cast<float>(counts[i]));
+            }
+        }
+
+        // copy the computed per-vertex normals into the mesh.
+        for (int i = 0; i < numPoints; i++)
+        {
+            g.mesh.normals[i] = vertexNormals[i];
+        }
+    }
+}
+
 Geom buildGeomFromUsdMesh(UsdGeomMesh mesh, GfMatrix4d worldXform)
 {
     // Convert to glm::mat4 (column-major)
@@ -215,7 +276,7 @@ Geom buildGeomFromUsdMesh(UsdGeomMesh mesh, GfMatrix4d worldXform)
     {
         std::cout << "Input mesh is not properly triangulated." << std::endl;
         raise(SIGINT);
-    } else if (numIndices != numNormals)
+    } else if (numIndices != numNormals && numPoints != numNormals)
     {
         std::cout << "Input mush does not have proper normals." << std::endl;
         std::cout << "Normals: " << numNormals << std::endl;
@@ -227,7 +288,7 @@ Geom buildGeomFromUsdMesh(UsdGeomMesh mesh, GfMatrix4d worldXform)
 
     // start filling arrays
     g.mesh.points = new glm::vec3[numPoints];
-    g.mesh.normals = new glm::vec3[numNormals];
+    g.mesh.normals = new glm::vec3[numPoints];
     g.mesh.triVerts = new glm::ivec3[numTris];
 
     for (int i = 0; i < numPoints; i++)
@@ -235,10 +296,7 @@ Geom buildGeomFromUsdMesh(UsdGeomMesh mesh, GfMatrix4d worldXform)
         g.mesh.points[i] = glm::vec3(points[i][0], points[i][1], points[i][2]);
     }
 
-    for (int i = 0; i < numNormals; i++)
-    {
-        g.mesh.normals[i] = glm::vec3(normals[i][0], normals[i][1], normals[i][2]);
-    }
+    processNormals(numPoints, numNormals, numTris, normals, faceVertexIndices, g);
 
     int i = 0;
     for (int triIdx = 0; triIdx < numTris; triIdx++)

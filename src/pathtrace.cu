@@ -477,7 +477,7 @@ __global__ void kernelShowNormalsView(int n,
     int pathIndex = pathIndices[i];
     ShadeableIntersection hit = intersections[pathIndex];
 
-    pathSegments[pathIndex].color = glm::abs(hit.surfaceNormal);
+    pathSegments[pathIndex].color = hit.surfaceNormal * 0.5f + glm::vec3(0.5f);  // map 0 to 1
 
     pathSegments[pathIndex].remainingBounces = 0;
 }
