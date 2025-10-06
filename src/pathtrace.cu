@@ -118,7 +118,7 @@ int* partitions = NULL;
 
 // 1D block for path tracing
 const int blockSize1d = 128;
-const int maxBitLengthMaterialID = 3;
+const int maxBitLengthMaterialID = 4;
 
 template<typename T>
 __global__ void scatterFromIndices(const int n, const int* indices, const T* in, T* out)

@@ -17,6 +17,10 @@
 #include <pxr/base/gf/vec3f.h>
 #include <pxr/base/gf/vec3d.h>
 
+#include <pxr/usd/usdShade/materialBindingAPI.h>
+#include <pxr/usd/usdShade/material.h>
+#include <pxr/usd/usdShade/shader.h>
+
 #pragma GCC diagnostic pop
 
 PXR_NAMESPACE_USING_DIRECTIVE

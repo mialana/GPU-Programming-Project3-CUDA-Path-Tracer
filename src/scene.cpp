@@ -326,27 +326,112 @@ void Scene::loadFromUSD(const std::string& usdName)
 
     for (const UsdPrim& prim : usdStage->Traverse())
     {
-        // Check if the prim is a UsdGeomMesh
         if (prim.IsA<UsdGeomMesh>())
         {
             UsdGeomMesh mesh(prim);
-
             std::cout << "Found Mesh: " << mesh.GetPath() << std::endl;
 
             // transform
             GfMatrix4d worldXform;
             worldXform = xformCache.GetLocalToWorldTransform(prim);
-
             Geom baseGeom = buildGeomFromUsdMesh(mesh, worldXform);
+
+            geoms.push_back(baseGeom);
+
+
+            // comment out for buggy geom subset traversal
+
+            // bool foundGeomSubsets = false;
+            // for (const UsdPrim& child : prim.GetChildren())
+            // {
+            //     if (child.IsA<UsdGeomSubset>())
+            //     {
+            //         foundGeomSubsets = true;
+
+            //         UsdShadeMaterialBindingAPI bindingAPI(child);
+            //         UsdShadeMaterial mat = bindingAPI.ComputeBoundMaterial();
+
+            //         glm::vec3 diffuse(1.f, 0.f, 0.f);  // fallback red
+
+            //         if (mat)
+            //         {
+            //             UsdShadeShader surface = mat.ComputeSurfaceSource();
+            //             if (surface)
+            //             {
+            //                 UsdAttribute diffuseAttr = surface.GetInput(TfToken("diffuseColor"));
+            //                 if (!diffuseAttr)
+            //                 {
+            //                     diffuseAttr = surface.GetInput(TfToken("displayColor"));
+            //                 }
+
+            //                 GfVec3f usdColor;
+            //                 if (diffuseAttr && diffuseAttr.Get(&usdColor))
+            //                 {
+            //                     diffuse = glm::vec3(usdColor[0], usdColor[1], usdColor[2]);
+            //                 }
+            //             }
+            //         }
+
+            //         Material subsetMat{};
+            //         subsetMat.color = diffuse;
+            //         std::string subsetName = "USD_" + std::string(child.GetPath().GetString());
+
+            //         std::cout << "Assigning color " << diffuse.r << ", " << diffuse.g << ", "
+            //                   << diffuse.b << " to " << subsetName << std::endl;
+
+            //         materials.push_back(subsetMat);
+
+            //         Geom subsetGeom = baseGeom;
+            //         subsetGeom.materialid = materials.size() - 1;
+            //         geoms.push_back(subsetGeom);
+            //     }
+            // }
+
+            // if (!foundGeomSubsets)
+            // {
+            //     UsdShadeMaterialBindingAPI bindingAPI(prim);
+            //     UsdShadeMaterial mat = bindingAPI.ComputeBoundMaterial();
+
+            //     glm::vec3 diffuse(0.f, 1.f, 0.f);  // fallback green
+
+            //     if (mat)
+            //     {
+            //         UsdShadeShader surface = mat.ComputeSurfaceSource();
+            //         if (surface)
+            //         {
+            //             UsdAttribute diffuseAttr = surface.GetInput(TfToken("diffuseColor"));
+            //             if (!diffuseAttr)
+            //             {
+            //                 diffuseAttr = surface.GetInput(TfToken("displayColor"));
+            //             }
+
+            //             GfVec3f usdColor;
+            //             if (diffuseAttr && diffuseAttr.Get(&usdColor))
+            //             {
+            //                 diffuse = glm::vec3(usdColor[0], usdColor[1], usdColor[2]);
+            //             }
+            //         }
+            //     }
+
+            //     Material subsetMat{};
+            //     subsetMat.color = diffuse;
+            //     std::string subsetName = "USD_" + std::string(prim.GetPath().GetString());
+
+            //     std::cout << "Assigning color " << diffuse.r << ", " << diffuse.g << ", "
+            //               << diffuse.b << " to " << subsetName << std::endl;
+
+            //     materials.push_back(subsetMat);
+
+            //     Geom subsetGeom = baseGeom;
+            //     subsetGeom.materialid = materials.size() - 1;
+            //     geoms.push_back(subsetGeom);
+            // }
 
             std::cout << "Built geom from USD mesh:" << std::endl;
             std::cout << "   Name: " << mesh.GetPath() << std::endl;
             std::cout << "   Vertices: " << baseGeom.mesh.vertexCount << std::endl;
             std::cout << "   Triangles: " << baseGeom.mesh.triCount << std::endl;
-
-            geoms.push_back(baseGeom);
         }
     }
-
     Scene::loadFromJSON("scenes/base.json");  // import light and cornel box as scene base
 }

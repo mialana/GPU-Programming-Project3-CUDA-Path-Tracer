@@ -14,6 +14,6 @@ include(Defaults)
 include(Packages)
 include(Utils)
 
-_usd_target_properties(${CMAKE_PROJECT_NAME} LIBRARIES ${GL_LIBRARIES} stream_compaction usd usdGeom gf vt hd)
+_usd_target_properties(${CMAKE_PROJECT_NAME} LIBRARIES ${GL_LIBRARIES} stream_compaction usd usdGeom gf vt hd usdShade)
 
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE ENABLE_USD)
