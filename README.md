@@ -1,7 +1,7 @@
 CUDA C++ Path Tracer
 ================
 
-![img](img/jelloshelf_preview.webp)
+<img src="img/jelloshelf_preview.webp" width="400">
 
 **University of Pennsylvania, CIS 565: GPU Programming and Architecture, Project 3**
 
