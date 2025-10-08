@@ -2,8 +2,9 @@
 
 CMAKE := /opt/cmake-4.1.1/bin/cmake
 
-format: ./source
-	find source \
+format: ./src
+	find src stream_compaction \
+	-path src/ImGui -prune -o \
   -type f \( -iname '*.h' -o -iname '*.hpp' -o -iname '*.cpp' -o -iname '*.cu' -o -iname '*.glsl' \) \
   -exec clang-format -i {} +
 
@@ -17,7 +18,7 @@ build:
 	${CMAKE} --build --preset aliu-$(MODE)
 
 Debug:
-	${CMAKE} --build --preset aliu-$@ && ./build/bin/$@/cis565_path_tracer ./scenes/sphere.json
+	${CMAKE} --build --preset aliu-$@ && ./build/bin/$@/cuda_path_tracer ./scenes/jelloShelf.usda
 
 Release:
-	${CMAKE} --build --preset aliu-$@ && ./build/bin/$@/cis565_path_tracer ./scenes/sphere.json
+	${CMAKE} --build --preset aliu-$@ && ./build/bin/$@/cuda_path_tracer ./scenes/jelloShelf.usda

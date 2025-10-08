@@ -19,8 +19,8 @@ def Xform "root" (
         custom string userProperties:blender:object_name = "jelloShelf"
         float3 xformOp:rotateXYZ = (-89.99999, -0, 0)
         float3 xformOp:scale = (0.37523186, 0.311204, 0.19943151)
-        double3 xformOp:translate = (0, 1.5, 1)
-        float3 xformOp:scale:post = (5.0, 5.0, 5.0)
+        double3 xformOp:translate = (0, 1.5, 1.5)
+        float3 xformOp:scale:post = (6.0, 6.0, 6.0)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale", "xformOp:scale:post"]
 
         def Mesh "Cube_014" (
