@@ -1,0 +1,63 @@
+#usda 1.0
+(
+    defaultPrim = "yugiohClockArc"
+)
+
+def "yugiohClockArc"
+{
+    def Scope "Geometry" (
+        variants = {
+            string varset_Geometry = "lod0"
+        }
+        prepend variantSets = "varset_Geometry"
+    )
+    {
+        variantSet "varset_Geometry" = {
+            "bbox" {
+                def "bbox" (
+                    prepend payload = @./bbox/geometry_bbox.usda@
+                )
+                {
+                }
+
+            }
+            "lod0" {
+                def "LOD0" (
+                    prepend payload = @./LOD0/geometry_LOD0.usda@
+                )
+                {
+                }
+
+            }
+            "lod1" {
+                def "LOD1" (
+                    prepend payload = @./LOD1/geometry_LOD1.usda@
+                )
+                {
+                }
+
+            }
+            "lod2" {
+                def "LOD2" (
+                    prepend payload = @./LOD2/geometry_LOD2.usda@
+                )
+                {
+                }
+
+            }
+        }
+    }
+
+    def "Materials"
+    {
+        def "MaterialClasses"
+        {
+            class "class_Default" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+            )
+            {
+            }
+        }
+    }
+}
+

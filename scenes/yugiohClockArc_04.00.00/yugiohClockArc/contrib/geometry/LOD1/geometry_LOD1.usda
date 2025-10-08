@@ -1,0 +1,98 @@
+#usda 1.0
+(
+    defaultPrim = "Geometry"
+)
+
+def "Geometry"
+{
+    def Xform "yugiohClockArc_LOD1" (
+        prepend inherits = </yugiohClockArc/Materials/MaterialClasses/class_Default>
+    )
+    {
+        def Xform "bodyXform"
+        {
+            float3 xformOp:scale = (30, 30, 30)
+            double3 xformOp:translate = (0, 2.5, 0)
+            uniform token[] xformOpOrder = ["xformOp:scale", "xformOp:translate"]
+
+            def Sphere "bodySphere"
+            {
+            }
+
+            def Xform "head1Xform"
+            {
+                float3 xformOp:rotateXYZ = (30, 0, 0)
+                float3 xformOp:scale = (0.375, 0.5, 0.375)
+                double3 xformOp:translate = (0, 1.25, 0.75)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Cube "head1Cube"
+                {
+                }
+
+                def Cube "head2"
+                {
+                    float3 xformOp:rotateXYZ = (100, 0, 0)
+                    float3 xformOp:scale = (0.8, 1.45, 0.45)
+                    double3 xformOp:translate = (0, 1, 1)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+                }
+            }
+
+            def Cube "wing1"
+            {
+                float3 xformOp:scale = (1, 1, 0.125)
+                double3 xformOp:translate = (1.5, 1.25, -0.6)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+            }
+
+            def Cube "wing2"
+            {
+                float3 xformOp:scale = (1, 1, 0.125)
+                double3 xformOp:translate = (-1.5, 1.25, -0.6)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+            }
+
+            def Cylinder "pole"
+            {
+                float3 xformOp:rotateXYZ = (90, 0, 0)
+                float3 xformOp:scale = (0.1, 0.1, 0.5)
+                double3 xformOp:translate = (0, -1.25, 0)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+            }
+
+            def Cone "gem"
+            {
+                float3 xformOp:rotateXYZ = (90, 0, 0)
+                float3 xformOp:scale = (0.5, 0.5, 0.5)
+                double3 xformOp:translate = (0, -2, 0)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+            }
+
+            def Sphere "gear1"
+            {
+                float3 xformOp:rotateXYZ = (0, 0, 0)
+                float3 xformOp:scale = (0.6, 0.6, 0.5)
+                double3 xformOp:translate = (0, 0, 0.8)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+            }
+
+            def Sphere "gear2"
+            {
+                float3 xformOp:rotateXYZ = (-45, 90, 0)
+                float3 xformOp:scale = (0.3, 0.3, 0.25)
+                double3 xformOp:translate = (0.65, 0.65, 0)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+            }
+
+            def Sphere "gear3"
+            {
+                float3 xformOp:rotateXYZ = (-45, -90, 0)
+                float3 xformOp:scale = (0.3, 0.3, 0.25)
+                double3 xformOp:translate = (-0.65, 0.65, 0)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+            }
+        }
+    }
+}
+

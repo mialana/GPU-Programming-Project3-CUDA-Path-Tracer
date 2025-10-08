@@ -1,0 +1,20 @@
+#usda 1.0
+(
+    defaultPrim = "yugiohClockArc"
+    metersPerUnit = 0.01
+    upAxis = "Y"
+)
+
+def Xform "yugiohClockArc" (
+    assetInfo = {
+        string name = "yugiohClockArc"
+    }
+    kind = "component"
+    references = [
+        @./contrib/material/material.usda@,
+        @./contrib/geometry/geometry.usda@
+    ]
+)
+{
+}
+

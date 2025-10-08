@@ -1,0 +1,21 @@
+#usda 1.0
+(
+    defaultPrim = "yugiohClockArc"
+)
+
+def "yugiohClockArc"
+{
+    def Scope "Materials" (
+        prepend references = @./default/material_default.usda@
+    )
+    {
+        def Scope "MaterialClasses"
+        {
+            over "class_Default"
+            {
+                prepend rel material:binding = </yugiohClockArc/Materials/mat_Default>
+            }
+        }
+    }
+}
+

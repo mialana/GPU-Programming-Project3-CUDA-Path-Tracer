@@ -1,0 +1,22 @@
+#usda 1.0
+(
+    defaultPrim = "Geometry"
+)
+
+def "Geometry"
+{
+    def Xform "yugiohClockArc_bbox" (
+        prepend inherits = </yugiohClockArc/Materials/MaterialClasses/class_Default>
+    )
+    {
+        def Cube "cube_Bbox"
+        {
+            float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+            double size = 1
+            float3 xformOp:scale = (211.34042, 171.30788, 132.49554)
+            double3 xformOp:translate = (-0.1816558837890625, 86.27530610561371, 28.075693130493164)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+    }
+}
+
